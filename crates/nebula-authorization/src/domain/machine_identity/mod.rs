@@ -22,6 +22,10 @@ pub struct MachineIdentity {
     deleted: bool,
 }
 
+pub struct MachineIdentityCreationResult {
+    pub id: Ulid,
+}
+
 impl MachineIdentity {
     pub(crate) fn update_attributes(&mut self, attributes: &[(&str, &str)]) {
         let current_attributes: HashSet<(&str, &str)> =
@@ -139,11 +143,11 @@ impl MachineIdentityService {
         transaction: &DatabaseTransaction,
         owner_claim: &NebulaClaim,
         label: &str,
-    ) -> Result<()> {
-        let machine_identity_id = UlidId::new(Ulid::new());
+    ) -> Result<MachineIdentityCreationResult> {
+        let machine_identity_id = Ulid::new();
         let now = Utc::now();
         machine_identity::ActiveModel {
-            id: Set(machine_identity_id),
+            id: Set(UlidId::new(machine_identity_id)),
             owner_gid: Set(owner_claim.gid.to_owned()),
             label: Set(label.to_owned()),
             created_at: Set(now),
@@ -152,7 +156,7 @@ impl MachineIdentityService {
         .insert(transaction)
         .await?;
 
-        Ok(())
+        Ok(MachineIdentityCreationResult { id: machine_identity_id })
     }
 
     pub async fn get_machine_identities(&self, transaction: &DatabaseTransaction) -> Result<Vec<MachineIdentity>> {

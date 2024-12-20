@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use axum::{
-    extract::{Path, Query, Request, State},
-    http::{HeaderMap, StatusCode},
+    extract::{OriginalUri, Path, Query, Request, State},
+    http::{header, uri::PathAndQuery, HeaderMap, HeaderValue, StatusCode, Uri},
     middleware::{self, Next},
     response::{IntoResponse, Redirect, Response},
     routing::{delete, get, patch, post},
@@ -18,6 +18,7 @@ use nebula_token::{
 use sea_orm::{DatabaseTransaction, DbErr, TransactionTrait};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::error;
 use ulid::Ulid;
 
 use crate::{
@@ -371,6 +372,9 @@ enum MachineIdentityError {
     #[error("Error occurrred by database")]
     #[status(StatusCode::INTERNAL_SERVER_ERROR)]
     DatabaseError(#[from] DbErr),
+    #[error("failed to create location header")]
+    #[status(StatusCode::INTERNAL_SERVER_ERROR)]
+    FailedToCreateLocationHeader,
 }
 
 impl From<machine_identity::Error> for MachineIdentityError {
@@ -382,6 +386,7 @@ impl From<machine_identity::Error> for MachineIdentityError {
 }
 
 async fn handle_post_machine_identity(
+    OriginalUri(uri): OriginalUri,
     Path(workspace_name): Path<String>,
     State(application): State<Arc<Application>>,
     Extension(claim): Extension<NebulaClaim>,
@@ -389,11 +394,35 @@ async fn handle_post_machine_identity(
 ) -> Result<impl IntoResponse, MachineIdentityError> {
     let transaction = application.database_connection.begin_with_workspace_scope(&workspace_name).await?;
 
-    application.machine_identity_service.register_machine_identity(&transaction, &claim, &payload.label).await?;
+    let result =
+        application.machine_identity_service.register_machine_identity(&transaction, &claim, &payload.label).await?;
+
+    let mut parts = uri.into_parts();
+
+    let new_machine_identity_path = PathAndQuery::from_str(&format!(
+        "{}/{}",
+        parts.path_and_query.ok_or_else(|| {
+            error!("failed to get request path while creating location url");
+            MachineIdentityError::FailedToCreateLocationHeader
+        })?,
+        result.id
+    ))
+    .inspect_err(|e| error!(error = %e, "failed to create uri path from new machine identity resource"))
+    .map_err(|_| MachineIdentityError::FailedToCreateLocationHeader)?;
+
+    parts.path_and_query = Some(new_machine_identity_path);
+    let location_header_uri = Uri::from_parts(parts)
+        .inspect_err(|e| error!(error = %e, "failed to create location uri from new machine identity resource"))
+        .map_err(|_| MachineIdentityError::FailedToCreateLocationHeader)?;
+    let location_header_value = HeaderValue::from_str(&location_header_uri.to_string())
+        .inspect_err(
+            |e| error!(error = %e, "failed to create location header value from new machine identity resource"),
+        )
+        .map_err(|_| MachineIdentityError::FailedToCreateLocationHeader)?;
 
     transaction.commit().await?;
 
-    Ok(StatusCode::CREATED)
+    Ok((StatusCode::CREATED, [(header::LOCATION, location_header_value)]))
 }
 
 #[derive(Serialize)]
