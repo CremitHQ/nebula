@@ -562,8 +562,14 @@ impl Persistable for Path {
                 }
             }
 
-            applied_path_policy::Entity::insert_many(applied_path_policy_models).exec(transaction).await?;
-            applied_path_policy_allowed_action::Entity::insert_many(allowed_action_models).exec(transaction).await?;
+            if !applied_path_policy_models.is_empty() {
+                applied_path_policy::Entity::insert_many(applied_path_policy_models).exec(transaction).await?;
+            }
+            if !allowed_action_models.is_empty() {
+                applied_path_policy_allowed_action::Entity::insert_many(allowed_action_models)
+                    .exec(transaction)
+                    .await?;
+            }
         }
 
         Ok(())
