@@ -4,12 +4,10 @@ use async_trait::async_trait;
 use sea_orm::{DatabaseConnection, DatabaseTransaction, DbErr};
 use ulid::Ulid;
 
-use crate::{
+use nebula_domain::{
+    self as domain,
+    authority::{Authority, AuthorityService},
     database::{Persistable, WorkspaceScopedTransaction},
-    domain::{
-        self,
-        authority::{Authority, AuthorityService},
-    },
 };
 
 pub struct AuthorityData {

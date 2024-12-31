@@ -3,13 +3,11 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use sea_orm::{DatabaseConnection, TransactionTrait};
 
-use crate::{
+use nebula_domain::{
     database::Persistable,
-    domain::{
-        parameter::Error as ParameterError,
-        secret::Error as SecretError,
-        workspace::{Error as WorkspaceServiceError, Workspace, WorkspaceService},
-    },
+    parameter::Error as ParameterError,
+    secret::Error as SecretError,
+    workspace::{Error as WorkspaceServiceError, Workspace, WorkspaceService},
 };
 
 use self::{command::CreatingWorkspaceCommand, data::WorkspaceData};
@@ -146,7 +144,7 @@ mod test {
 
     use super::{command::CreatingWorkspaceCommand, Error, WorkspaceUseCase, WorkspaceUseCaseImpl};
 
-    use crate::domain::{
+    use nebula_domain::{
         parameter::{MockParameterService, Parameter},
         secret::MockSecretService,
         workspace::{Error as WorkspaceServiceError, MockWorkspaceService, Workspace},

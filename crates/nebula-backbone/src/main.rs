@@ -6,8 +6,6 @@ use crate::logger::LoggerConfig;
 
 pub(crate) mod application;
 pub(crate) mod config;
-pub(crate) mod database;
-pub(crate) mod domain;
 pub(crate) mod logger;
 pub(crate) mod server;
 

@@ -5,16 +5,14 @@ use nebula_token::auth::jwks_discovery::{CachedRemoteJwksDiscovery, JwksDiscover
 use parameter::{ParameterUseCase, ParameterUseCaseImpl};
 use sea_orm::{DatabaseConnection, TransactionTrait};
 
-use crate::{
-    config::{ApplicationConfig, WorkspaceConfig},
+use crate::config::{ApplicationConfig, WorkspaceConfig};
+use nebula_domain::{
+    authority::{AuthorityService, PostgresAuthorityService},
     database::{self, connect_to_database, AuthMethod},
-    domain::{
-        authority::{AuthorityService, PostgresAuthorityService},
-        parameter::{ParameterService, PostgresParameterService},
-        policy::{PolicyService, PostgresPolicyService},
-        secret::{PostgresSecretService, SecretService},
-        workspace::{WorkspaceService, WorkspaceServiceImpl},
-    },
+    parameter::{ParameterService, PostgresParameterService},
+    policy::{PolicyService, PostgresPolicyService},
+    secret::{PostgresSecretService, SecretService},
+    workspace::{WorkspaceService, WorkspaceServiceImpl},
 };
 
 use workspace::{WorkspaceUseCase, WorkspaceUseCaseImpl};
@@ -148,7 +146,7 @@ pub(super) async fn init(config: &ApplicationConfig) -> anyhow::Result<Applicati
         WorkspaceConfig::Static { ref name } => {
             let transaction = database_connection.begin_with_workspace_scope(name).await?;
             match workspace_service.create(&transaction, name).await {
-                Ok(_) | Err(crate::domain::workspace::Error::WorkspaceNameConflicted) => {}
+                Ok(_) | Err(nebula_domain::workspace::Error::WorkspaceNameConflicted) => {}
                 Err(e) => {
                     transaction.rollback().await?;
                     bail!("Failed to create workspace: {:?}", e);
@@ -156,7 +154,7 @@ pub(super) async fn init(config: &ApplicationConfig) -> anyhow::Result<Applicati
             }
 
             match parameter_service.create(&transaction).await {
-                Ok(_) | Err(crate::domain::parameter::Error::ParameterAlreadyCreated(_)) => {
+                Ok(_) | Err(nebula_domain::parameter::Error::ParameterAlreadyCreated(_)) => {
                     transaction.commit().await?;
                 }
                 Err(e) => {

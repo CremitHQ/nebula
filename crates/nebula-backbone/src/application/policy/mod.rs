@@ -4,9 +4,10 @@ use async_trait::async_trait;
 use sea_orm::DatabaseConnection;
 use ulid::Ulid;
 
-use crate::{
+use nebula_domain::{
+    self as domain,
     database::{Persistable, WorkspaceScopedTransaction},
-    domain::{self, policy::PolicyService},
+    policy::PolicyService,
 };
 
 #[async_trait]
@@ -161,7 +162,7 @@ mod test {
     use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult};
     use ulid::Ulid;
 
-    use crate::domain::policy::{AccessCondition, MockPolicyService};
+    use nebula_domain::policy::{AccessCondition, MockPolicyService};
 
     use super::{Error, PolicyUseCase, PolicyUseCaseImpl};
 
@@ -203,7 +204,7 @@ mod test {
             .expect_list()
             .withf(|_| true)
             .times(1)
-            .returning(move |_| Err(crate::domain::policy::Error::Anyhow(anyhow::anyhow!("some error"))));
+            .returning(move |_| Err(nebula_domain::policy::Error::Anyhow(anyhow::anyhow!("some error"))));
         let policy_usecase =
             PolicyUseCaseImpl::new("testworkspace".to_owned(), mock_connection, Arc::new(mock_policy_service));
 
@@ -268,7 +269,7 @@ mod test {
 
         let mut mock_policy_service = MockPolicyService::new();
         mock_policy_service.expect_register().times(1).returning(move |_, _, expression| {
-            Err(crate::domain::policy::Error::InvalidExpression(nebula_policy::error::PolicyParserError::JsonPolicy(
+            Err(nebula_domain::policy::Error::InvalidExpression(nebula_policy::error::PolicyParserError::JsonPolicy(
                 expression.to_owned(),
             )))
         });

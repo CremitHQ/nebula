@@ -2704,8 +2704,8 @@ dependencies = [
  "clap",
  "config",
  "futures-util",
- "nebula-common",
  "nebula-config-path",
+ "nebula-domain",
  "nebula-token",
  "openssl",
  "rand",
@@ -2746,7 +2746,7 @@ dependencies = [
  "maplit",
  "mockall",
  "nebula-abe",
- "nebula-common",
+ "nebula-domain",
  "nebula-policy",
  "nebula-token",
  "pest",
@@ -2803,14 +2803,52 @@ dependencies = [
 ]
 
 [[package]]
-name = "nebula-common"
-version = "0.0.5"
-
-[[package]]
 name = "nebula-config-path"
 version = "0.0.5"
 dependencies = [
  "winapi",
+]
+
+[[package]]
+name = "nebula-domain"
+version = "0.0.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "aws-config",
+ "aws-credential-types",
+ "aws-sigv4",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "clap",
+ "config",
+ "futures-util",
+ "lazy_static",
+ "maplit",
+ "mockall",
+ "nebula-abe",
+ "nebula-policy",
+ "nebula-token",
+ "pest",
+ "pest_derive",
+ "rand",
+ "regex",
+ "reqwest",
+ "rmp-serde",
+ "sea-orm",
+ "sea-orm-migration",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "ulid",
+ "url",
+ "urlencoding",
+ "xdg",
 ]
 
 [[package]]

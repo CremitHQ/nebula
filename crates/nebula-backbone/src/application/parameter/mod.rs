@@ -4,12 +4,10 @@ use async_trait::async_trait;
 use nebula_abe::{curves::bn462::Bn462Curve, schemes::isabella24::GlobalParams};
 use sea_orm::DatabaseConnection;
 
-use crate::{
+use nebula_domain::{
+    self as domain,
     database::WorkspaceScopedTransaction,
-    domain::{
-        self,
-        parameter::{Parameter, ParameterService},
-    },
+    parameter::{Parameter, ParameterService},
 };
 
 #[async_trait]
@@ -97,7 +95,7 @@ mod test {
     };
     use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult};
 
-    use crate::domain::parameter::{MockParameterService, Parameter};
+    use nebula_domain::parameter::{MockParameterService, Parameter};
 
     use super::{ParameterUseCase, ParameterUseCaseImpl};
 
@@ -139,7 +137,7 @@ mod test {
         mock_parameter_service
             .expect_get()
             .times(1)
-            .returning(move |_| Err(crate::domain::parameter::Error::Anyhow(anyhow::anyhow!(""))));
+            .returning(move |_| Err(nebula_domain::parameter::Error::Anyhow(anyhow::anyhow!(""))));
 
         let parameter_usecase = ParameterUseCaseImpl::new(
             workspace_name.clone(),

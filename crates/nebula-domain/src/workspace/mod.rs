@@ -5,14 +5,14 @@ mod workspace_service;
 use sea_orm::{DatabaseTransaction, EntityTrait};
 use tracing::info;
 use ulid::Ulid;
-#[cfg(test)]
-pub(crate) use workspace_service::MockWorkspaceService;
-pub(crate) use workspace_service::{WorkspaceService, WorkspaceServiceImpl};
+#[cfg(any(test, feature = "testing"))]
+pub use workspace_service::MockWorkspaceService;
+pub use workspace_service::{WorkspaceService, WorkspaceServiceImpl};
 
 use crate::database::{Persistable, UlidId};
 
 #[derive(Debug, PartialEq)]
-pub(crate) struct Workspace {
+pub struct Workspace {
     id: Ulid,
     pub name: String,
     deleted: bool,
@@ -23,13 +23,21 @@ impl Workspace {
         Self { id, name, deleted: false }
     }
 
-    pub(crate) fn delete(&mut self) {
+    pub fn delete(&mut self) {
         self.deleted = true
     }
 }
 
+pub fn validate_workspace_name(name: &str) -> bool {
+    if name.is_empty() || name.len() > 255 || !name.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return false;
+    }
+
+    true
+}
+
 #[derive(thiserror::Error, Debug)]
-pub(crate) enum Error {
+pub enum Error {
     #[error("workspace name already exists")]
     WorkspaceNameConflicted,
 
@@ -40,13 +48,13 @@ pub(crate) enum Error {
     Anyhow(#[from] anyhow::Error),
 }
 
-pub(crate) type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[async_trait]
 impl Persistable for Workspace {
-    type Error = crate::domain::workspace::Error;
+    type Error = crate::workspace::Error;
 
-    async fn persist(self, transaction: &DatabaseTransaction) -> crate::domain::workspace::Result<()> {
+    async fn persist(self, transaction: &DatabaseTransaction) -> crate::workspace::Result<()> {
         if self.deleted {
             use crate::database::workspace::Entity;
 

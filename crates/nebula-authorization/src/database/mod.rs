@@ -13,7 +13,7 @@ use aws_sigv4::{
     http_request::{sign, SignableBody, SignableRequest, SigningSettings},
     sign::v4::SigningParams,
 };
-use nebula_common::validate_workspace_name;
+use nebula_domain::workspace::validate_workspace_name;
 use sea_orm::{sqlx::postgres::PgConnectOptions, ConnectionTrait, DatabaseBackend, Statement, TransactionTrait};
 use sea_orm::{ConnectOptions, Database, DatabaseConnection, DatabaseTransaction, DbErr, TryFromU64, TryGetError};
 use ulid::Ulid;

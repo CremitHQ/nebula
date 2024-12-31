@@ -4,7 +4,7 @@ use pest_derive::Parser;
 use super::{Error, PolicyNode};
 
 #[derive(Parser)]
-#[grammar = "domain/secret/path_policy/pest/policy.pest"]
+#[grammar = "secret/path_policy/pest/policy.pest"]
 pub(crate) struct PolicyParser;
 
 pub(crate) fn parse(pair: Pair<'_, Rule>) -> Result<PolicyNode<'_>, Error> {

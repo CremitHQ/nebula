@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use async_trait::async_trait;
 use chrono::Utc;
 use lazy_static::lazy_static;
-#[cfg(test)]
+#[cfg(any(test, feature = "testing"))]
 use mockall::automock;
 use nebula_token::claim::NebulaClaim;
 use regex::Regex;
@@ -23,7 +23,7 @@ use super::policy::AccessCondition;
 
 mod path_policy;
 
-pub(crate) struct SecretEntry {
+pub struct SecretEntry {
     pub key: String,
     pub path: String,
     pub cipher: Vec<u8>,
@@ -35,8 +35,8 @@ pub(crate) struct SecretEntry {
 }
 
 impl SecretEntry {
-    #[cfg(test)]
-    pub(crate) fn new(key: String, path: String, cipher: Vec<u8>, access_condition_ids: Vec<Ulid>) -> Self {
+    #[cfg(any(test, feature = "testing"))]
+    pub fn new(key: String, path: String, cipher: Vec<u8>, access_condition_ids: Vec<Ulid>) -> Self {
         Self {
             key,
             path,
@@ -133,7 +133,7 @@ impl SecretEntry {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone)]
-pub(crate) struct AppliedPolicy {
+pub struct AppliedPolicy {
     pub expression: String,
     pub allowed_actions: Vec<AllowedAction>,
 }
@@ -171,7 +171,7 @@ impl From<(applied_path_policy::Model, Vec<applied_path_policy_allowed_action::M
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
-pub(crate) enum AllowedAction {
+pub enum AllowedAction {
     Create,
     Update,
     Delete,
@@ -325,7 +325,7 @@ impl From<(secret_metadata::Model, Vec<applied_policy::Model>, Vec<u8>)> for Sec
     }
 }
 
-pub(crate) struct Path {
+pub struct Path {
     pub path: String,
     pub applied_policies: Vec<AppliedPolicy>,
     deleted: bool,
@@ -334,11 +334,11 @@ pub(crate) struct Path {
 }
 
 impl Path {
-    pub(crate) fn new(path: String, applied_policies: Vec<AppliedPolicy>) -> Self {
+    pub fn new(path: String, applied_policies: Vec<AppliedPolicy>) -> Self {
         Self { path, applied_policies, deleted: false, updated_path: None, updated_policies: None }
     }
 
-    pub(crate) async fn delete(&mut self, transaction: &DatabaseTransaction, claim: &NebulaClaim) -> Result<()> {
+    pub async fn delete(&mut self, transaction: &DatabaseTransaction, claim: &NebulaClaim) -> Result<()> {
         self.ensure_accessible(AllowedAction::Manage, claim)?;
         for parent_path in get_all_parent_paths(transaction, &self.path).await? {
             parent_path.ensure_accessible(AllowedAction::Manage, claim)?;
@@ -348,7 +348,7 @@ impl Path {
         Ok(())
     }
 
-    pub(crate) async fn update_path(
+    pub async fn update_path(
         &mut self,
         transaction: &DatabaseTransaction,
         new_path: &str,
@@ -369,7 +369,7 @@ impl Path {
         Ok(())
     }
 
-    pub(crate) async fn update_policies(
+    pub async fn update_policies(
         &mut self,
         transaction: &DatabaseTransaction,
         new_policies: &[AppliedPolicy],
@@ -576,9 +576,9 @@ impl Persistable for Path {
     }
 }
 
-#[cfg_attr(test, automock)]
+#[cfg_attr(any(test, feature = "testing"), automock)]
 #[async_trait]
-pub(crate) trait SecretService {
+pub trait SecretService {
     async fn list_secret(
         &self,
         transaction: &DatabaseTransaction,
@@ -655,7 +655,7 @@ fn validate_path(path: &str) -> Result<()> {
     Err(Error::InvalidPath { entered_path: path.to_owned() })
 }
 
-pub(crate) struct PostgresSecretService {}
+pub struct PostgresSecretService {}
 
 fn check_secret_accessible(secret_policy: &policy::Model, claim: &NebulaClaim) -> Result<bool> {
     let (parsed_policy, _) =
@@ -1093,7 +1093,7 @@ async fn get_path(transaction: &DatabaseTransaction, path: &str) -> Result<Optio
 }
 
 #[derive(thiserror::Error, Debug)]
-pub(crate) enum Error {
+pub enum Error {
     #[error("Path({entered_path}) is in use")]
     PathIsInUse { entered_path: String },
     #[error("Entered path({entered_path}) is already registered")]
@@ -1136,7 +1136,7 @@ impl From<path_policy::Error> for Error {
     }
 }
 
-pub(crate) type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
 mod test {
@@ -1153,10 +1153,8 @@ mod test {
             applied_path_policy, applied_path_policy_allowed_action, applied_policy, path, policy, secret_metadata,
             secret_value, UlidId,
         },
-        domain::{
-            policy::AccessCondition,
-            secret::{Path, SecretEntry},
-        },
+        policy::AccessCondition,
+        secret::{Path, SecretEntry},
     };
 
     #[tokio::test]

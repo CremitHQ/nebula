@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::Utc;
-#[cfg(test)]
+#[cfg(any(test, feature = "testing"))]
 use mockall::automock;
 use rand::{rngs::OsRng, Rng};
 use sea_orm::{
@@ -14,19 +14,19 @@ use nebula_abe::{
     schemes::isabella24::GlobalParams,
 };
 
-pub(crate) struct Parameter {
+pub struct Parameter {
     pub version: i32,
     pub value: GlobalParams<Bn462Curve>,
 }
 
-#[cfg_attr(test, automock)]
+#[cfg_attr(any(test, feature = "testing"), automock)]
 #[async_trait]
-pub(crate) trait ParameterService {
+pub trait ParameterService {
     async fn create(&self, transaction: &DatabaseTransaction) -> Result<Parameter>;
     async fn get(&self, transaction: &DatabaseTransaction) -> Result<Parameter>;
 }
 
-pub(crate) struct PostgresParameterService;
+pub struct PostgresParameterService;
 
 pub const PARAMETER_VERSION: i32 = 1;
 
@@ -76,7 +76,7 @@ impl ParameterService for PostgresParameterService {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub(crate) enum Error {
+pub enum Error {
     #[error("Parameter has already been created with version {0}")]
     ParameterAlreadyCreated(i32),
 
@@ -99,7 +99,7 @@ impl From<sea_orm::DbErr> for Error {
     }
 }
 
-pub(crate) type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
 mod test {
