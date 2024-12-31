@@ -3,13 +3,12 @@ use std::sync::Arc;
 use super::Error;
 use crate::{
     database::{migrate_workspace, AuthMethod},
-    domain::workspace::Workspace,
+    workspace::{validate_workspace_name, Workspace},
 };
 use async_trait::async_trait;
 use chrono::Utc;
-#[cfg(test)]
+#[cfg(any(test, feature = "testing"))]
 use mockall::automock;
-use nebula_common::validate_workspace_name;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection, DatabaseTransaction, DbErr,
     EntityTrait, PaginatorTrait, QueryFilter, RuntimeErr, SqlxError, Statement,
@@ -17,15 +16,15 @@ use sea_orm::{
 use tracing::info;
 use ulid::Ulid;
 
-#[cfg_attr(test, automock)]
+#[cfg_attr(any(test, feature = "testing"), automock)]
 #[async_trait]
-pub(crate) trait WorkspaceService {
+pub trait WorkspaceService {
     async fn get_all(&self, transaction: &DatabaseTransaction) -> Result<Vec<Workspace>>;
     async fn get_by_name(&self, transaction: &DatabaseTransaction, name: &str) -> Result<Option<Workspace>>;
     async fn create(&self, transaction: &DatabaseTransaction, name: &str) -> Result<()>;
 }
 
-pub(crate) struct WorkspaceServiceImpl {
+pub struct WorkspaceServiceImpl {
     connection: Arc<DatabaseConnection>,
     database_host: String,
     database_port: u16,
@@ -34,7 +33,7 @@ pub(crate) struct WorkspaceServiceImpl {
 }
 
 impl WorkspaceServiceImpl {
-    pub(crate) fn new(
+    pub fn new(
         connection: Arc<DatabaseConnection>,
         database_host: String,
         database_port: u16,
@@ -128,7 +127,7 @@ impl From<DbErr> for Error {
     }
 }
 
-pub(crate) type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
 mod test {

@@ -1,11 +1,14 @@
 [package]
-name = "nebula-backbone"
+name = "nebula-domain"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
+
+[features]
+testing = ["dep:mockall"]
 
 [dependencies]
 tokio = { workspace = true, features = ["full"] }
@@ -42,9 +45,8 @@ reqwest = { workspace = true, features = ["json"] }
 tower-http = { workspace = true, features = ["cors"] }
 pest.workspace = true
 pest_derive.workspace = true
-nebula-domain = { workspace = true }
+mockall = { workspace = true, optional = true }
 
 [dev-dependencies]
-nebula-domain = { workspace = true, features = ["testing"] }
 mockall = { workspace = true }
 maplit = "1.0.2"

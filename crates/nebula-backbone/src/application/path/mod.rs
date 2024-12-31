@@ -4,9 +4,9 @@ use async_trait::async_trait;
 use nebula_token::claim::NebulaClaim;
 use sea_orm::DatabaseConnection;
 
-use crate::{
+use nebula_domain::{
     database::{Persistable, WorkspaceScopedTransaction},
-    domain::secret::{self, AppliedPolicy, Path, SecretService},
+    secret::{self, AppliedPolicy, Path, SecretService},
 };
 
 pub(crate) struct PathData {
@@ -178,9 +178,9 @@ mod test {
     use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult};
     use ulid::Ulid;
 
-    use crate::{
+    use nebula_domain::{
         database::{applied_path_policy, path, secret_metadata, secret_value, UlidId},
-        domain::secret::{MockSecretService, Path},
+        secret::{MockSecretService, Path},
     };
 
     use super::{Error, PathUseCase, PathUseCaseImpl};
@@ -221,7 +221,7 @@ mod test {
             .expect_get_paths()
             .withf(|_| true)
             .times(1)
-            .returning(move |_| Err(crate::domain::secret::Error::Anyhow(anyhow::anyhow!("some error"))));
+            .returning(move |_| Err(nebula_domain::secret::Error::Anyhow(anyhow::anyhow!("some error"))));
         let path_usecase =
             PathUseCaseImpl::new("testworkspace".to_owned(), mock_connection, Arc::new(mock_secret_service));
 

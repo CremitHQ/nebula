@@ -5,13 +5,11 @@ use nebula_token::claim::NebulaClaim;
 use sea_orm::{DatabaseConnection, DatabaseTransaction};
 use ulid::Ulid;
 
-use crate::{
+use nebula_domain::{
+    self as domain,
     database::{Persistable, WorkspaceScopedTransaction},
-    domain::{
-        self,
-        policy::{AccessCondition, PolicyService},
-        secret::{SecretEntry, SecretService},
-    },
+    policy::{AccessCondition, PolicyService},
+    secret::{SecretEntry, SecretService},
 };
 
 #[async_trait]
@@ -218,12 +216,10 @@ mod test {
     use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult};
     use ulid::Ulid;
 
-    use crate::{
-        application::secret::SecretRegisterCommand,
-        domain::{
-            policy::{AccessCondition, MockPolicyService},
-            secret::{MockSecretService, SecretEntry},
-        },
+    use crate::application::secret::SecretRegisterCommand;
+    use nebula_domain::{
+        policy::{AccessCondition, MockPolicyService},
+        secret::{MockSecretService, SecretEntry},
     };
 
     use super::{Error, SecretUseCase, SecretUseCaseImpl};
@@ -294,7 +290,7 @@ mod test {
             .expect_list_secret()
             .withf(|_, path, _| path == "/")
             .times(1)
-            .returning(move |_, _, _| Err(crate::domain::secret::Error::Anyhow(anyhow::anyhow!("some error"))));
+            .returning(move |_, _, _| Err(nebula_domain::secret::Error::Anyhow(anyhow::anyhow!("some error"))));
         let mock_policy_service = MockPolicyService::new();
 
         let secret_usecase = SecretUseCaseImpl::new(

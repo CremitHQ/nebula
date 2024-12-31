@@ -6,6 +6,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use crate::workspace::validate_workspace_name;
 use anyhow::bail;
 use async_trait::async_trait;
 use aws_config::BehaviorVersion;
@@ -14,7 +15,6 @@ use aws_sigv4::{
     http_request::{sign, SignableBody, SignableRequest, SigningSettings},
     sign::v4::SigningParams,
 };
-use nebula_common::validate_workspace_name;
 use sea_orm::sqlx::postgres::PgConnectOptions;
 use sea_orm::{
     ConnectOptions, ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, DatabaseTransaction, DbErr,
@@ -26,20 +26,20 @@ use url::Url;
 pub use migration::migrate;
 pub use workspace_migration::{migrate_all_workspaces, migrate_workspace};
 
-pub(crate) mod applied_path_policy;
-pub(crate) mod applied_path_policy_allowed_action;
-pub(crate) mod applied_policy;
-pub(crate) mod authority;
+pub mod applied_path_policy;
+pub mod applied_path_policy_allowed_action;
+pub mod applied_policy;
+pub mod authority;
 mod migration;
-pub(crate) mod parameter;
-pub(crate) mod path;
-pub(crate) mod policy;
-pub(crate) mod secret_metadata;
-pub(crate) mod secret_value;
-pub(crate) mod workspace;
+pub mod parameter;
+pub mod path;
+pub mod policy;
+pub mod secret_metadata;
+pub mod secret_value;
+pub mod workspace;
 mod workspace_migration;
 
-pub(crate) enum AuthMethod {
+pub enum AuthMethod {
     Credential { username: String, password: Option<String> },
     RdsIamAuth { host: String, port: u16, username: String },
 }
@@ -293,7 +293,7 @@ impl sea_orm::sea_query::ValueType for UlidId {
 }
 
 #[async_trait]
-pub(crate) trait Persistable {
+pub trait Persistable {
     type Error;
 
     async fn persist(self, transaction: &DatabaseTransaction) -> std::result::Result<(), Self::Error>;

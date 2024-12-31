@@ -1,14 +1,14 @@
 use crate::database::{policy, Persistable, UlidId};
 use async_trait::async_trait;
 use chrono::Utc;
-#[cfg(test)]
+#[cfg(any(test, feature = "testing"))]
 use mockall::automock;
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseTransaction, EntityTrait, PaginatorTrait, QueryFilter, Set,
 };
 use ulid::Ulid;
 
-pub(crate) struct AccessCondition {
+pub struct AccessCondition {
     pub id: Ulid,
     pub name: String,
     pub expression: String,
@@ -87,15 +87,15 @@ impl Persistable for AccessCondition {
     }
 }
 
-#[cfg_attr(test, automock)]
+#[cfg_attr(any(test, feature = "testing"), automock)]
 #[async_trait]
-pub(crate) trait PolicyService {
+pub trait PolicyService {
     async fn list(&self, transaction: &DatabaseTransaction) -> Result<Vec<AccessCondition>>;
     async fn get(&self, transaction: &DatabaseTransaction, id: &Ulid) -> Result<Option<AccessCondition>>;
     async fn register(&self, transaction: &DatabaseTransaction, name: &str, expression: &str) -> Result<()>;
 }
 
-pub(crate) struct PostgresPolicyService {}
+pub struct PostgresPolicyService {}
 
 #[async_trait]
 impl PolicyService for PostgresPolicyService {
@@ -146,7 +146,7 @@ fn validate_expression(expression: &str) -> Result<()> {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub(crate) enum Error {
+pub enum Error {
     #[error(transparent)]
     InvalidExpression(#[from] nebula_policy::error::PolicyParserError),
     #[error("Entered policy name({entered_policy_name}) is already registered.")]
@@ -161,7 +161,7 @@ impl From<sea_orm::DbErr> for Error {
     }
 }
 
-pub(crate) type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
 mod test {
@@ -174,7 +174,7 @@ mod test {
     use super::{Error, PolicyService, PostgresPolicyService};
     use crate::{
         database::{policy, Persistable, UlidId},
-        domain::policy::AccessCondition,
+        policy::AccessCondition,
     };
 
     #[tokio::test]

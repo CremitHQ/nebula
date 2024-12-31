@@ -42,7 +42,7 @@ async fn handle_post_path(
     Json(payload): Json<PostPathRequest>,
 ) -> Result<impl IntoResponse, application::path::Error> {
     let policies: Vec<_> =
-        payload.applied_policies.into_iter().map(crate::domain::secret::AppliedPolicy::from).collect();
+        payload.applied_policies.into_iter().map(nebula_domain::secret::AppliedPolicy::from).collect();
     application.with_workspace(&workspace_name).path().register(&payload.path, &policies, &claim).await?;
 
     Ok(StatusCode::NO_CONTENT)
@@ -77,7 +77,7 @@ async fn handle_patch_path(
     Json(payload): Json<PatchPathRequest>,
 ) -> Result<impl IntoResponse, application::path::Error> {
     let new_policies: Option<Vec<_>> =
-        payload.applied_policies.map(|aps| aps.into_iter().map(crate::domain::secret::AppliedPolicy::from).collect());
+        payload.applied_policies.map(|aps| aps.into_iter().map(nebula_domain::secret::AppliedPolicy::from).collect());
     application
         .with_workspace(&workspace_name)
         .path()
@@ -113,8 +113,8 @@ impl From<application::path::PathData> for response::PathResponse {
     }
 }
 
-impl From<crate::domain::secret::AppliedPolicy> for model::AppliedPolicy {
-    fn from(value: crate::domain::secret::AppliedPolicy) -> Self {
+impl From<nebula_domain::secret::AppliedPolicy> for model::AppliedPolicy {
+    fn from(value: nebula_domain::secret::AppliedPolicy) -> Self {
         Self {
             expression: value.expression,
             allowed_actions: value.allowed_actions.into_iter().map(model::AllowedAction::from).collect(),
@@ -122,31 +122,31 @@ impl From<crate::domain::secret::AppliedPolicy> for model::AppliedPolicy {
     }
 }
 
-impl From<crate::domain::secret::AllowedAction> for model::AllowedAction {
-    fn from(value: crate::domain::secret::AllowedAction) -> Self {
+impl From<nebula_domain::secret::AllowedAction> for model::AllowedAction {
+    fn from(value: nebula_domain::secret::AllowedAction) -> Self {
         match value {
-            crate::domain::secret::AllowedAction::Create => model::AllowedAction::Create,
-            crate::domain::secret::AllowedAction::Update => model::AllowedAction::Update,
-            crate::domain::secret::AllowedAction::Delete => model::AllowedAction::Delete,
-            crate::domain::secret::AllowedAction::Manage => model::AllowedAction::Manage,
+            nebula_domain::secret::AllowedAction::Create => model::AllowedAction::Create,
+            nebula_domain::secret::AllowedAction::Update => model::AllowedAction::Update,
+            nebula_domain::secret::AllowedAction::Delete => model::AllowedAction::Delete,
+            nebula_domain::secret::AllowedAction::Manage => model::AllowedAction::Manage,
         }
     }
 }
 
-impl From<model::AppliedPolicy> for crate::domain::secret::AppliedPolicy {
+impl From<model::AppliedPolicy> for nebula_domain::secret::AppliedPolicy {
     fn from(value: model::AppliedPolicy) -> Self {
         Self {
             expression: value.expression,
             allowed_actions: value
                 .allowed_actions
                 .into_iter()
-                .map(crate::domain::secret::AllowedAction::from)
+                .map(nebula_domain::secret::AllowedAction::from)
                 .collect(),
         }
     }
 }
 
-impl From<model::AllowedAction> for crate::domain::secret::AllowedAction {
+impl From<model::AllowedAction> for nebula_domain::secret::AllowedAction {
     fn from(value: model::AllowedAction) -> Self {
         match value {
             model::AllowedAction::Create => Self::Create,

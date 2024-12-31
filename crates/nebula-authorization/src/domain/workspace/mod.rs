@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use nebula_common::validate_workspace_name;
+use nebula_domain::workspace::validate_workspace_name;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection, DatabaseTransaction, DbErr,
     EntityTrait, PaginatorTrait, QueryFilter, RuntimeErr, SqlxError, Statement,
