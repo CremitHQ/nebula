@@ -6,8 +6,6 @@ use crate::logger::LoggerConfig;
 
 mod application;
 mod config;
-mod database;
-mod domain;
 mod logger;
 mod server;
 

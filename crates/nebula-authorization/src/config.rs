@@ -1,5 +1,6 @@
 use config::{Config, File, FileFormat};
 use nebula_config_path::config_dir;
+use nebula_domain::connector::saml::{AttributesConfig, SAMLAdminRoleConfig, WorkspaceConfig};
 use nebula_token::jwk::jwk_set::JwkSet;
 use serde::Deserialize;
 use url::Url;

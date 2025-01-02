@@ -1,22 +1,29 @@
 use async_trait::async_trait;
 use futures_util::future::join_all;
-use sea_orm::{DatabaseTransaction, DbErr, EntityTrait};
+use sea_orm::{
+    sea_query::{Alias, IntoIden},
+    DatabaseTransaction, DbErr, EntityTrait,
+};
 use sea_orm_migration::{IntoSchemaManagerConnection, MigrationTrait, MigratorTrait};
 
 use super::{workspace, AuthMethod};
 
-mod m20241126_001_init_backbone;
+mod m20241128_001_init_authorization;
 
 pub struct Migrator;
 
 #[async_trait]
 impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
-        vec![Box::new(m20241126_001_init_backbone::Migration)]
+        vec![Box::new(m20241128_001_init_authorization::Migration)]
+    }
+
+    fn migration_table_name() -> sea_orm::DynIden {
+        Alias::new("seaql_migrations_authorization").into_iden()
     }
 }
 
-pub async fn migrate_all_workspaces(
+pub async fn migrate_all_authorization_workspaces(
     transaction: &DatabaseTransaction,
     host: &str,
     port: u16,
@@ -26,7 +33,9 @@ pub async fn migrate_all_workspaces(
     let workspaces = workspace::Entity::find().all(transaction).await?;
 
     let results = join_all(
-        workspaces.iter().map(|workspace| migrate_workspace(&workspace.name, host, port, database_name, auth)),
+        workspaces
+            .iter()
+            .map(|workspace| migrate_authorization_workspace(&workspace.name, host, port, database_name, auth)),
     )
     .await;
 
@@ -37,23 +46,7 @@ pub async fn migrate_all_workspaces(
     Ok(())
 }
 
-#[cfg(test)]
-pub async fn migrate_workspace(
-    _workspace_slug: &str,
-    _host: &str,
-    _port: u16,
-    _database_name: &str,
-    _auth: &AuthMethod,
-) -> anyhow::Result<()> {
-    use tracing::debug;
-
-    debug!("workspace migration not supported in test environment");
-
-    Ok(())
-}
-
-#[cfg(not(test))]
-pub async fn migrate_workspace(
+pub async fn migrate_authorization_workspace(
     workspace_slug: &str,
     host: &str,
     port: u16,

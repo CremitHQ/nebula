@@ -1,17 +1,12 @@
-use std::sync::Arc;
-
 use super::Error;
-use crate::{
-    database::{migrate_workspace, AuthMethod},
-    workspace::{validate_workspace_name, Workspace},
-};
+use crate::workspace::{validate_workspace_name, Workspace};
 use async_trait::async_trait;
 use chrono::Utc;
 #[cfg(any(test, feature = "testing"))]
 use mockall::automock;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection, DatabaseTransaction, DbErr,
-    EntityTrait, PaginatorTrait, QueryFilter, RuntimeErr, SqlxError, Statement,
+    ActiveModelTrait, ColumnTrait, DatabaseTransaction, DbErr, EntityTrait, PaginatorTrait, QueryFilter, RuntimeErr,
+    SqlxError,
 };
 use tracing::info;
 use ulid::Ulid;
@@ -24,25 +19,10 @@ pub trait WorkspaceService {
     async fn create(&self, transaction: &DatabaseTransaction, name: &str) -> Result<()>;
 }
 
-pub struct WorkspaceServiceImpl {
-    connection: Arc<DatabaseConnection>,
-    database_host: String,
-    database_port: u16,
-    database_name: String,
-    database_auth: AuthMethod,
-}
+#[derive(Default)]
+pub struct WorkspaceServiceImpl {}
 
 impl WorkspaceServiceImpl {
-    pub fn new(
-        connection: Arc<DatabaseConnection>,
-        database_host: String,
-        database_port: u16,
-        database_name: String,
-        database_auth: AuthMethod,
-    ) -> Self {
-        Self { connection, database_host, database_port, database_name, database_auth }
-    }
-
     async fn exists_by_name(&self, transaction: &DatabaseTransaction, name: &str) -> Result<bool> {
         use crate::database::workspace;
 
@@ -75,16 +55,6 @@ impl WorkspaceService for WorkspaceServiceImpl {
         if !validate_workspace_name(name) {
             return Err(Error::InvalidWorkspaceName);
         }
-
-        self.connection
-            .execute(Statement::from_string(
-                DatabaseBackend::Postgres,
-                format!("CREATE SCHEMA IF NOT EXISTS \"{name}\";"),
-            ))
-            .await?;
-
-        migrate_workspace(name, &self.database_host, self.database_port, &self.database_name, &self.database_auth)
-            .await?;
 
         if self.exists_by_name(transaction, name).await? {
             return Err(Error::WorkspaceNameConflicted);
@@ -137,8 +107,6 @@ mod test {
     use sea_orm::{DatabaseBackend, DbErr, MockDatabase, MockExecResult, TransactionTrait};
     use ulid::Ulid;
 
-    use crate::database::AuthMethod;
-
     use super::{Error, WorkspaceService, WorkspaceServiceImpl};
 
     #[tokio::test]
@@ -160,13 +128,7 @@ mod test {
             .append_exec_results([MockExecResult { last_insert_id: 0, rows_affected: 0 }]);
         let mock_connection = Arc::new(mock_database.into_connection());
 
-        let workspace_service = WorkspaceServiceImpl::new(
-            mock_connection.clone(),
-            "mock.database.host".to_owned(),
-            5432,
-            "postgres".to_owned(),
-            AuthMethod::Credential { username: "postgres".to_owned(), password: None },
-        );
+        let workspace_service = WorkspaceServiceImpl::default();
 
         let transaction = mock_connection.begin().await.expect("begining transaction should be successful");
 
@@ -190,13 +152,7 @@ mod test {
             }]]);
         let mock_connection = Arc::new(mock_database.into_connection());
 
-        let workspace_service = WorkspaceServiceImpl::new(
-            mock_connection.clone(),
-            "mock.database.host".to_owned(),
-            5432,
-            "postgres".to_owned(),
-            AuthMethod::Credential { username: "postgres".to_owned(), password: None },
-        );
+        let workspace_service = WorkspaceServiceImpl::default();
 
         let transaction = mock_connection.begin().await.expect("begining transaction should be successful");
 
@@ -218,13 +174,7 @@ mod test {
             .append_query_errors(vec![DbErr::Custom("some error".to_owned())]);
         let mock_connection = Arc::new(mock_database.into_connection());
 
-        let workspace_service = WorkspaceServiceImpl::new(
-            mock_connection.clone(),
-            "mock.database.host".to_owned(),
-            5432,
-            "postgres".to_owned(),
-            AuthMethod::Credential { username: "postgres".to_owned(), password: None },
-        );
+        let workspace_service = WorkspaceServiceImpl::default();
 
         let transaction = mock_connection.begin().await.expect("begining transaction should be successful");
 
@@ -250,13 +200,7 @@ mod test {
         }]]);
         let mock_connection = Arc::new(mock_database.into_connection());
 
-        let workspace_service = WorkspaceServiceImpl::new(
-            mock_connection.clone(),
-            "mock.database.host".to_owned(),
-            5432,
-            "postgres".to_owned(),
-            AuthMethod::Credential { username: "postgres".to_owned(), password: None },
-        );
+        let workspace_service = WorkspaceServiceImpl::default();
 
         let transaction = mock_connection.begin().await.expect("begining transaction should be successful");
 
@@ -272,13 +216,7 @@ mod test {
             .append_query_errors(vec![DbErr::Custom("some error".to_owned())]);
         let mock_connection = Arc::new(mock_database.into_connection());
 
-        let workspace_service = WorkspaceServiceImpl::new(
-            mock_connection.clone(),
-            "mock.database.host".to_owned(),
-            5432,
-            "postgres".to_owned(),
-            AuthMethod::Credential { username: "postgres".to_owned(), password: None },
-        );
+        let workspace_service = WorkspaceServiceImpl::default();
 
         let transaction = mock_connection.begin().await.expect("begining transaction should be successful");
 
@@ -296,13 +234,7 @@ mod test {
         let mock_database = MockDatabase::new(DatabaseBackend::Postgres).append_query_results([Vec::<Model>::new()]);
         let mock_connection = Arc::new(mock_database.into_connection());
 
-        let workspace_service = WorkspaceServiceImpl::new(
-            mock_connection.clone(),
-            "mock.database.host".to_owned(),
-            5432,
-            "postgres".to_owned(),
-            AuthMethod::Credential { username: "postgres".to_owned(), password: None },
-        );
+        let workspace_service = WorkspaceServiceImpl::default();
 
         let transaction = mock_connection.begin().await.expect("begining transaction should be successful");
 
@@ -319,13 +251,7 @@ mod test {
             .append_query_errors(vec![DbErr::Custom("some error".to_owned())]);
         let mock_connection = Arc::new(mock_database.into_connection());
 
-        let workspace_service = WorkspaceServiceImpl::new(
-            mock_connection.clone(),
-            "mock.database.host".to_owned(),
-            5432,
-            "postgres".to_owned(),
-            AuthMethod::Credential { username: "postgres".to_owned(), password: None },
-        );
+        let workspace_service = WorkspaceServiceImpl::default();
 
         let transaction = mock_connection.begin().await.expect("begining transaction should be successful");
 
@@ -350,13 +276,7 @@ mod test {
         }]]);
         let mock_connection = Arc::new(mock_database.into_connection());
 
-        let workspace_service = WorkspaceServiceImpl::new(
-            mock_connection.clone(),
-            "mock.database.host".to_owned(),
-            5432,
-            "postgres".to_owned(),
-            AuthMethod::Credential { username: "postgres".to_owned(), password: None },
-        );
+        let workspace_service = WorkspaceServiceImpl::default();
 
         let transaction = mock_connection.begin().await.expect("begining transaction should be successful");
 

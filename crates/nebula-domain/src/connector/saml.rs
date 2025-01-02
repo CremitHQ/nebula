@@ -22,7 +22,7 @@ pub enum AttributesConfig {
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE", tag = "type")]
-pub(crate) enum SAMLAdminRoleConfig {
+pub enum SAMLAdminRoleConfig {
     All,
     Group { attribute_name: String, admin_groups: Vec<String> },
 }

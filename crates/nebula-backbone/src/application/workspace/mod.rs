@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use sea_orm::{DatabaseConnection, TransactionTrait};
 
 use nebula_domain::{
-    database::Persistable,
+    database::{BackboneWorkspaceSchemaMigrator, Persistable},
     parameter::Error as ParameterError,
     secret::Error as SecretError,
     workspace::{Error as WorkspaceServiceError, Workspace, WorkspaceService},
@@ -29,6 +29,7 @@ pub(crate) struct WorkspaceUseCaseImpl {
     workspace_service: Arc<dyn WorkspaceService + Sync + Send>,
     secret_service: Arc<dyn SecretService + Sync + Send>,
     parameter_service: Arc<dyn ParameterService + Sync + Send>,
+    schema_migrator: Arc<BackboneWorkspaceSchemaMigrator>,
 }
 
 impl WorkspaceUseCaseImpl {
@@ -37,8 +38,9 @@ impl WorkspaceUseCaseImpl {
         workspace_service: Arc<dyn WorkspaceService + Sync + Send>,
         secret_service: Arc<dyn SecretService + Sync + Send>,
         parameter_service: Arc<dyn ParameterService + Sync + Send>,
+        schema_migrator: Arc<BackboneWorkspaceSchemaMigrator>,
     ) -> Self {
-        Self { database_connection, workspace_service, secret_service, parameter_service }
+        Self { database_connection, workspace_service, secret_service, parameter_service, schema_migrator }
     }
 }
 
@@ -60,9 +62,11 @@ impl WorkspaceUseCase for WorkspaceUseCaseImpl {
             self.database_connection.begin_with_workspace_scope(&cmd.name).await.map_err(anyhow::Error::from)?;
 
         self.workspace_service.create(&transaction, &cmd.name).await?;
+
+        self.schema_migrator.migrate(&cmd.name).await?;
+
         self.secret_service.initialize_root_path(&transaction).await?;
         self.parameter_service.create(&transaction).await?;
-
         transaction.commit().await.map_err(anyhow::Error::from)?;
 
         Ok(())
@@ -145,6 +149,7 @@ mod test {
     use super::{command::CreatingWorkspaceCommand, Error, WorkspaceUseCase, WorkspaceUseCaseImpl};
 
     use nebula_domain::{
+        database::{AuthMethod, BackboneWorkspaceSchemaMigrator},
         parameter::{MockParameterService, Parameter},
         secret::MockSecretService,
         workspace::{Error as WorkspaceServiceError, MockWorkspaceService, Workspace},
@@ -175,10 +180,17 @@ mod test {
             .returning(move |_| Ok(Parameter { version: 1, value: GlobalParams::<Bn462Curve>::new(&mut rng) }));
 
         let workspace_use_case = WorkspaceUseCaseImpl::new(
-            mock_connection,
+            mock_connection.clone(),
             Arc::new(workspace_service_mock),
             Arc::new(secret_service_mock),
             Arc::new(parameter_service_mock),
+            Arc::new(BackboneWorkspaceSchemaMigrator::new(
+                mock_connection.clone(),
+                "mock.database.host".to_owned(),
+                5432,
+                "postgres".to_owned(),
+                AuthMethod::Credential { username: "postgres".to_owned(), password: None },
+            )),
         );
         workspace_use_case
             .create(CreatingWorkspaceCommand { name: WORKSPACE_NAME.to_owned() })
@@ -203,10 +215,17 @@ mod test {
         let parameter_service_mock = MockParameterService::new();
 
         let workspace_use_case = WorkspaceUseCaseImpl::new(
-            mock_connection,
+            mock_connection.clone(),
             Arc::new(workspace_service_mock),
             Arc::new(secret_service_mock),
             Arc::new(parameter_service_mock),
+            Arc::new(BackboneWorkspaceSchemaMigrator::new(
+                mock_connection.clone(),
+                "mock.database.host".to_owned(),
+                5432,
+                "postgres".to_owned(),
+                AuthMethod::Credential { username: "postgres".to_owned(), password: None },
+            )),
         );
         let result = workspace_use_case.create(CreatingWorkspaceCommand { name: WORKSPACE_NAME.to_owned() }).await;
 
@@ -232,10 +251,17 @@ mod test {
         let parameter_service_mock = MockParameterService::new();
 
         let workspace_use_case = WorkspaceUseCaseImpl::new(
-            mock_connection,
+            mock_connection.clone(),
             Arc::new(workspace_service_mock),
             Arc::new(secret_service_mock),
             Arc::new(parameter_service_mock),
+            Arc::new(BackboneWorkspaceSchemaMigrator::new(
+                mock_connection.clone(),
+                "mock.database.host".to_owned(),
+                5432,
+                "postgres".to_owned(),
+                AuthMethod::Credential { username: "postgres".to_owned(), password: None },
+            )),
         );
         let result = workspace_use_case.create(CreatingWorkspaceCommand { name: WORKSPACE_NAME.to_owned() }).await;
 
@@ -244,7 +270,7 @@ mod test {
 
     #[tokio::test]
     async fn when_getting_workspaces_succeed_use_case_should_returns_workspaces() {
-        let mock_database = Arc::new(MockDatabase::new(DatabaseBackend::Postgres).into_connection());
+        let mock_connection = Arc::new(MockDatabase::new(DatabaseBackend::Postgres).into_connection());
         let mut workspace_service_mock = MockWorkspaceService::new();
 
         workspace_service_mock
@@ -255,10 +281,17 @@ mod test {
         let parameter_service_mock = MockParameterService::new();
 
         let workspace_use_case = WorkspaceUseCaseImpl::new(
-            mock_database,
+            mock_connection.clone(),
             Arc::new(workspace_service_mock),
             Arc::new(secret_service_mock),
             Arc::new(parameter_service_mock),
+            Arc::new(BackboneWorkspaceSchemaMigrator::new(
+                mock_connection.clone(),
+                "mock.database.host".to_owned(),
+                5432,
+                "postgres".to_owned(),
+                AuthMethod::Credential { username: "postgres".to_owned(), password: None },
+            )),
         );
         let result = workspace_use_case.get_all().await;
 
@@ -271,7 +304,7 @@ mod test {
         let mock_database = MockDatabase::new(DatabaseBackend::Postgres)
             .append_exec_results([MockExecResult { last_insert_id: 0, rows_affected: 1 }]);
 
-        let mock_database = Arc::new(mock_database.into_connection());
+        let mock_connection = Arc::new(mock_database.into_connection());
         let mut workspace_service_mock = MockWorkspaceService::new();
         let secret_service_mock = MockSecretService::new();
         let parameter_service_mock = MockParameterService::new();
@@ -283,10 +316,17 @@ mod test {
             .returning(|_, _| Ok(Some(Workspace::new(Ulid::new(), "testworkspace".to_owned()))));
 
         let workspace_use_case = WorkspaceUseCaseImpl::new(
-            mock_database,
+            mock_connection.clone(),
             Arc::new(workspace_service_mock),
             Arc::new(secret_service_mock),
             Arc::new(parameter_service_mock),
+            Arc::new(BackboneWorkspaceSchemaMigrator::new(
+                mock_connection.clone(),
+                "mock.database.host".to_owned(),
+                5432,
+                "postgres".to_owned(),
+                AuthMethod::Credential { username: "postgres".to_owned(), password: None },
+            )),
         );
         let result = workspace_use_case.delete_by_name(WORKSPACE_NAME).await;
 
@@ -296,7 +336,7 @@ mod test {
     #[tokio::test]
     async fn when_deleting_workspace_failed_with_empty_workspace_use_case_should_returns_workspace_not_exists_error() {
         const WORKSPACE_NAME: &str = "testworkspace";
-        let mock_database = Arc::new(MockDatabase::new(DatabaseBackend::Postgres).into_connection());
+        let mock_connection = Arc::new(MockDatabase::new(DatabaseBackend::Postgres).into_connection());
         let mut workspace_service_mock = MockWorkspaceService::new();
 
         let secret_service_mock = MockSecretService::new();
@@ -308,10 +348,17 @@ mod test {
             .returning(|_, _| Ok(None));
 
         let workspace_use_case = WorkspaceUseCaseImpl::new(
-            mock_database,
+            mock_connection.clone(),
             Arc::new(workspace_service_mock),
             Arc::new(secret_service_mock),
             Arc::new(parameter_service_mock),
+            Arc::new(BackboneWorkspaceSchemaMigrator::new(
+                mock_connection.clone(),
+                "mock.database.host".to_owned(),
+                5432,
+                "postgres".to_owned(),
+                AuthMethod::Credential { username: "postgres".to_owned(), password: None },
+            )),
         );
         let result = workspace_use_case.delete_by_name(WORKSPACE_NAME).await;
 

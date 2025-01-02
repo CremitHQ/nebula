@@ -8,7 +8,7 @@ use sea_orm::{DatabaseConnection, TransactionTrait};
 use crate::config::{ApplicationConfig, WorkspaceConfig};
 use nebula_domain::{
     authority::{AuthorityService, PostgresAuthorityService},
-    database::{self, connect_to_database, AuthMethod},
+    database::{self, connect_to_database, AuthMethod, BackboneWorkspaceSchemaMigrator},
     parameter::{ParameterService, PostgresParameterService},
     policy::{PolicyService, PostgresPolicyService},
     secret::{PostgresSecretService, SecretService},
@@ -40,6 +40,7 @@ pub(crate) struct Application {
     policy_service: Arc<dyn PolicyService + Sync + Send>,
     authority_service: Arc<dyn AuthorityService + Sync + Send>,
     jwks_discovery: Arc<dyn JwksDiscovery + Send + Sync>,
+    schema_migrator: Arc<BackboneWorkspaceSchemaMigrator>,
 }
 
 impl Application {
@@ -49,6 +50,7 @@ impl Application {
             self.workspace_service.clone(),
             self.secret_service.clone(),
             self.parameter_service.clone(),
+            self.schema_migrator.clone(),
         )
     }
 
@@ -122,6 +124,7 @@ impl ApplicationWithWorkspace {
 
 pub(super) async fn init(config: &ApplicationConfig) -> anyhow::Result<Application> {
     let database_connection = init_database_connection(config).await?;
+    let auth_method = create_database_auth_method(config);
 
     let jwks_discovery: Arc<dyn JwksDiscovery + Send + Sync> =
         if let Some(refresh_interval) = config.jwks_refresh_interval {
@@ -130,18 +133,19 @@ pub(super) async fn init(config: &ApplicationConfig) -> anyhow::Result<Applicati
             Arc::new(CachedRemoteJwksDiscovery::new(config.jwks_url.clone(), Duration::from_secs(10)))
         };
 
-    let workspace_service = Arc::new(WorkspaceServiceImpl::new(
-        database_connection.clone(),
-        config.database.host.to_owned(),
-        config.database.port,
-        config.database.database_name.to_owned(),
-        create_database_auth_method(config),
-    ));
+    let workspace_service = Arc::new(WorkspaceServiceImpl::default());
     let secret_service = Arc::new(PostgresSecretService {});
     let parameter_service = Arc::new(PostgresParameterService);
     let policy_service = Arc::new(PostgresPolicyService {});
     let authority_service = Arc::new(PostgresAuthorityService {});
-    database::migrate(database_connection.as_ref()).await?;
+    let schema_migrator = Arc::new(BackboneWorkspaceSchemaMigrator::new(
+        database_connection.clone(),
+        config.database.host.to_owned(),
+        config.database.port,
+        config.database.database_name.to_owned(),
+        auth_method.clone(),
+    ));
+    nebula_domain::database::migrate(database_connection.as_ref()).await?;
     match config.workspace {
         WorkspaceConfig::Static { ref name } => {
             let transaction = database_connection.begin_with_workspace_scope(name).await?;
@@ -152,6 +156,7 @@ pub(super) async fn init(config: &ApplicationConfig) -> anyhow::Result<Applicati
                     bail!("Failed to create workspace: {:?}", e);
                 }
             }
+            schema_migrator.migrate(name).await?;
 
             match parameter_service.create(&transaction).await {
                 Ok(_) | Err(nebula_domain::parameter::Error::ParameterAlreadyCreated(_)) => {
@@ -164,7 +169,7 @@ pub(super) async fn init(config: &ApplicationConfig) -> anyhow::Result<Applicati
             }
         }
         WorkspaceConfig::Dynamic => {
-            database::migrate_all_workspaces(
+            database::migrate_all_backbone_workspaces(
                 &database_connection.begin().await?,
                 &config.database.host,
                 config.database.port,
@@ -183,6 +188,7 @@ pub(super) async fn init(config: &ApplicationConfig) -> anyhow::Result<Applicati
         policy_service,
         authority_service,
         jwks_discovery,
+        schema_migrator,
     })
 }
 

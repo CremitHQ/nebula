@@ -21,14 +21,13 @@ use thiserror::Error;
 use tracing::error;
 use ulid::Ulid;
 
-use crate::{
-    application::Application,
+use crate::application::Application;
+
+use nebula_domain::{
+    self as domain,
+    connector::Identity,
     database::{Persistable, WorkspaceScopedTransaction},
-    domain::{
-        self,
-        connector::Identity,
-        machine_identity::{self, MachineIdentity, MachineIdentityToken},
-    },
+    machine_identity::{self, MachineIdentity, MachineIdentityToken},
 };
 
 pub(crate) fn router(application: Arc<Application>) -> axum::Router {
@@ -242,6 +241,7 @@ async fn handle_post_workspace(
     let transaction = application.database_connection.begin().await?;
 
     application.workspace_service.create(&transaction, &payload.name).await?;
+    application.schema_migrator.migrate(&payload.name).await?;
 
     transaction.commit().await?;
 
