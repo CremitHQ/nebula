@@ -21,10 +21,6 @@ use url::Url;
 
 pub use workspace_migration::{migrate_all_workspaces, migrate_workspace};
 
-pub(crate) mod machine_identity;
-pub(crate) mod machine_identity_attribute;
-pub(crate) mod machine_identity_token;
-pub(crate) mod types;
 pub(crate) mod workspace;
 mod workspace_migration;
 

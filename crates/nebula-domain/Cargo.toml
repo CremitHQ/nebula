@@ -46,6 +46,9 @@ tower-http = { workspace = true, features = ["cors"] }
 pest.workspace = true
 pest_derive.workspace = true
 mockall = { workspace = true, optional = true }
+openssl = { workspace = true }
+bon = { workspace = true }
+samael = { version = "0.0.17", features = ["xmlsec"] }
 
 [dev-dependencies]
 mockall = { workspace = true }

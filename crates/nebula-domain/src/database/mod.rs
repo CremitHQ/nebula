@@ -30,12 +30,16 @@ pub mod applied_path_policy;
 pub mod applied_path_policy_allowed_action;
 pub mod applied_policy;
 pub mod authority;
+pub(crate) mod machine_identity;
+pub(crate) mod machine_identity_attribute;
+pub(crate) mod machine_identity_token;
 mod migration;
 pub mod parameter;
 pub mod path;
 pub mod policy;
 pub mod secret_metadata;
 pub mod secret_value;
+pub(crate) mod types;
 pub mod workspace;
 mod workspace_migration;
 
@@ -187,7 +191,7 @@ impl WorkspaceScopedTransaction for DatabaseConnection {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
 pub struct UlidId(Ulid);
 
 impl UlidId {

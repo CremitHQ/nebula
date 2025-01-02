@@ -8,11 +8,41 @@ use samael::{
     schema::{AttributeStatement, AuthnRequest},
     service_provider::{ServiceProvider, ServiceProviderBuilder},
 };
+use serde::Deserialize;
 use thiserror::Error;
 
-use crate::config::{AttributesConfig, SAMLAdminRoleConfig, WorkspaceConfig};
-
 use super::Identity;
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AttributesConfig {
+    All,
+    Mapping { claims: Vec<(String, String)> },
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE", tag = "type")]
+pub(crate) enum SAMLAdminRoleConfig {
+    All,
+    Group { attribute_name: String, admin_groups: Vec<String> },
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum WorkspaceConfig {
+    Static(StaticWorkspaceConfig),
+    Claim(ClaimWorkspaceConfig),
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct StaticWorkspaceConfig {
+    pub name: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct ClaimWorkspaceConfig {
+    pub claim: String,
+}
 
 #[derive(Builder)]
 #[builder(on(String, into))]
@@ -31,7 +61,7 @@ pub struct SAMLConnertorConfig {
 
 pub struct SAMLConnector {
     sso_url: Option<String>,
-    pub(crate) redirect_uri: String,
+    pub redirect_uri: String,
     service_provider: ServiceProvider,
     attributes_config: AttributesConfig,
     workspace_config: WorkspaceConfig,

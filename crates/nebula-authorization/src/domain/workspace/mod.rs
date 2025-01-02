@@ -11,47 +11,7 @@ use ulid::Ulid;
 
 use crate::database::{migrate_workspace, AuthMethod};
 
-#[derive(thiserror::Error, Debug)]
-pub(crate) enum Error {
-    #[error("workspace name already exists")]
-    WorkspaceNameConflicted,
-
-    #[error("invalid workspace name")]
-    InvalidWorkspaceName,
-
-    #[error(transparent)]
-    Anyhow(#[from] anyhow::Error),
-}
-
-pub(crate) type Result<T> = std::result::Result<T, Error>;
-
-pub(crate) struct WorkspaceService {
-    connection: Arc<DatabaseConnection>,
-    database_host: String,
-    database_port: u16,
-    database_name: String,
-    database_auth: AuthMethod,
-}
-
-impl WorkspaceService {}
-
 impl WorkspaceService {
-    pub(crate) fn new(
-        connection: Arc<DatabaseConnection>,
-        database_host: String,
-        database_port: u16,
-        database_name: String,
-        database_auth: AuthMethod,
-    ) -> Self {
-        Self { connection, database_host, database_port, database_name, database_auth }
-    }
-
-    async fn exists_by_name(&self, transaction: &DatabaseTransaction, name: &str) -> Result<bool> {
-        use crate::database::workspace;
-
-        Ok(workspace::Entity::find().filter(workspace::Column::Name.eq(name)).count(transaction).await? > 0)
-    }
-
     pub(crate) async fn create(&self, transaction: &DatabaseTransaction, name: &str) -> Result<()> {
         use crate::database::workspace::ActiveModel;
         use sea_orm::ActiveValue;
