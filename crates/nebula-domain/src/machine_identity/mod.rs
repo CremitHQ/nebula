@@ -27,7 +27,7 @@ pub struct MachineIdentityCreationResult {
 }
 
 impl MachineIdentity {
-    pub(crate) fn update_attributes(&mut self, attributes: &[(&str, &str)]) {
+    pub fn update_attributes(&mut self, attributes: &[(&str, &str)]) {
         let current_attributes: HashSet<(&str, &str)> =
             self.attributes.iter().map(|(key, value)| (key.as_str(), value.as_str())).collect();
 
@@ -39,7 +39,7 @@ impl MachineIdentity {
             Some(attributes.iter().map(|(key, value)| (key.to_string(), value.to_string())).collect());
     }
 
-    pub(crate) fn delete(&mut self) {
+    pub fn delete(&mut self) {
         self.deleted = true
     }
 }

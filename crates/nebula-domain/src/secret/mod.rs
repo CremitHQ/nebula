@@ -250,7 +250,7 @@ impl Persistable for SecretEntry {
                 return Ok(());
             };
             applied_policy::Entity::delete_many()
-                .filter(applied_policy::Column::SecretMetadataId.eq(metadata_id.clone()))
+                .filter(applied_policy::Column::SecretMetadataId.eq(metadata_id))
                 .exec(transaction)
                 .await?;
 
@@ -258,7 +258,7 @@ impl Persistable for SecretEntry {
                 let applied_access_policies =
                     updated_access_condition_ids.into_iter().map(|policy_id| applied_policy::ActiveModel {
                         id: Set(UlidId::new(Ulid::new())),
-                        secret_metadata_id: Set(metadata_id.clone()),
+                        secret_metadata_id: Set(metadata_id),
                         policy_id: Set(UlidId::new(policy_id)),
                         created_at: Set(now),
                         updated_at: Set(now),
@@ -433,7 +433,7 @@ impl Path {
         };
 
         let applied_path_policies = applied_path_policy::Entity::find()
-            .filter(applied_path_policy::Column::PathId.eq(path.id.clone()))
+            .filter(applied_path_policy::Column::PathId.eq(path.id))
             .all(transaction)
             .await?;
 
@@ -444,7 +444,7 @@ impl Path {
         applied_path_policy_allowed_action::Entity::delete_many()
             .filter(
                 applied_path_policy_allowed_action::Column::AppliedPathPolicyId
-                    .is_in(applied_path_policies.iter().map(|app| app.id.clone())),
+                    .is_in(applied_path_policies.iter().map(|app| app.id)),
             )
             .exec(transaction)
             .await?;
@@ -545,7 +545,7 @@ impl Persistable for Path {
 
                 applied_path_policy_models.push(applied_path_policy::ActiveModel {
                     id: Set(policy_id.into()),
-                    path_id: Set(path.id.clone()),
+                    path_id: Set(path.id),
                     expression: Set(updated_policy.expression.clone()),
                     created_at: Set(now),
                     updated_at: Set(now),
@@ -712,12 +712,12 @@ impl SecretService for PostgresSecretService {
         let policies_by_id: HashMap<_, _> = policy::Entity::find()
             .filter(
                 policy::Column::Id
-                    .is_in(applied_policies.iter().flatten().map(|applied_policy| applied_policy.policy_id.clone())),
+                    .is_in(applied_policies.iter().flatten().map(|applied_policy| applied_policy.policy_id)),
             )
             .all(transaction)
             .await?
             .into_iter()
-            .map(|policy| (policy.id.clone(), policy))
+            .map(|policy| (policy.id, policy))
             .collect();
 
         Ok(metadata
@@ -789,10 +789,7 @@ impl SecretService for PostgresSecretService {
             .unwrap_or_default();
 
         let policies = policy::Entity::find()
-            .filter(
-                policy::Column::Id
-                    .is_in(applied_policies.iter().map(|applied_policy| applied_policy.policy_id.clone())),
-            )
+            .filter(policy::Column::Id.is_in(applied_policies.iter().map(|applied_policy| applied_policy.policy_id)))
             .all(transaction)
             .await?;
 
@@ -827,7 +824,7 @@ impl SecretService for PostgresSecretService {
         let applied_path_policies = paths.load_many(applied_path_policy::Entity, transaction).await?;
 
         let applied_path_poilicy_ids =
-            applied_path_policies.iter().flat_map(|apps| apps.iter().map(|app| app.id.clone())).collect::<Vec<_>>();
+            applied_path_policies.iter().flat_map(|apps| apps.iter().map(|app| app.id)).collect::<Vec<_>>();
 
         let mut allowed_actions_map = if !applied_path_poilicy_ids.is_empty() {
             let mut allowed_actions_map = HashMap::<UlidId, Vec<applied_path_policy_allowed_action::Model>>::new();
@@ -837,8 +834,7 @@ impl SecretService for PostgresSecretService {
                 .await?;
 
             for allowed_action in allowed_actions {
-                let allowed_actions =
-                    allowed_actions_map.entry(allowed_action.applied_path_policy_id.clone()).or_default();
+                let allowed_actions = allowed_actions_map.entry(allowed_action.applied_path_policy_id).or_default();
                 allowed_actions.push(allowed_action);
             }
 
@@ -897,7 +893,7 @@ impl SecretService for PostgresSecretService {
 
         let secret_metadata_id = UlidId::new(Ulid::new());
         secret_metadata::ActiveModel {
-            id: Set(secret_metadata_id.clone()),
+            id: Set(secret_metadata_id),
             key: Set(key),
             path: Set(path),
             created_at: Set(now),
@@ -908,7 +904,7 @@ impl SecretService for PostgresSecretService {
 
         let applied_access_policies = access_conditions.into_iter().map(|access_policy| applied_policy::ActiveModel {
             id: Set(UlidId::new(Ulid::new())),
-            secret_metadata_id: Set(secret_metadata_id.clone()),
+            secret_metadata_id: Set(secret_metadata_id),
             policy_id: Set(UlidId::new(access_policy.id)),
             created_at: Set(now),
             updated_at: Set(now),
@@ -1058,7 +1054,7 @@ async fn get_path(transaction: &DatabaseTransaction, path: &str) -> Result<Optio
     };
 
     let applied_path_policies = applied_path_policy::Entity::find()
-        .filter(applied_path_policy::Column::PathId.eq(path.id.clone()))
+        .filter(applied_path_policy::Column::PathId.eq(path.id))
         .all(transaction)
         .await?;
 
@@ -1067,13 +1063,13 @@ async fn get_path(transaction: &DatabaseTransaction, path: &str) -> Result<Optio
         let allowed_actions = applied_path_policy_allowed_action::Entity::find()
             .filter(
                 applied_path_policy_allowed_action::Column::AppliedPathPolicyId
-                    .is_in(applied_path_policies.iter().map(|app| app.id.clone())),
+                    .is_in(applied_path_policies.iter().map(|app| app.id)),
             )
             .all(transaction)
             .await?;
 
         for allowed_action in allowed_actions {
-            let allowed_actions = allowed_actions_map.entry(allowed_action.applied_path_policy_id.clone()).or_default();
+            let allowed_actions = allowed_actions_map.entry(allowed_action.applied_path_policy_id).or_default();
             allowed_actions.push(allowed_action);
         }
         allowed_actions_map

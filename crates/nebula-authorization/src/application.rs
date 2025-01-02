@@ -1,14 +1,12 @@
 use std::sync::Arc;
 
-use crate::{
-    config::{ApplicationConfig, StaticWorkspaceConfig, UpstreamIdpConfig, WorkspaceConfig},
-    database::{self, connect_to_database, AuthMethod},
-    domain::{
-        connector::saml::{SAMLConnector, SAMLConnertorConfig},
-        machine_identity::MachineIdentityService,
-        token::TokenService,
-        workspace::WorkspaceService,
-    },
+use crate::config::{ApplicationConfig, UpstreamIdpConfig};
+use nebula_domain::{
+    connector::saml::{SAMLConnector, SAMLConnertorConfig, StaticWorkspaceConfig, WorkspaceConfig},
+    database::{self, connect_to_database, AuthMethod, AuthorizationWorkspaceSchemaMigrator},
+    machine_identity::MachineIdentityService,
+    token::TokenService,
+    workspace::{WorkspaceService, WorkspaceServiceImpl},
 };
 
 use nebula_token::jwk::jwk_set::{JwkSet, JWK_SET_DEFAULT_KEY_ID};
@@ -19,26 +17,27 @@ pub struct Application {
     pub connector: Arc<SAMLConnector>,
     pub token_service: Arc<TokenService>,
     pub machine_identity_service: Arc<MachineIdentityService>,
-    pub workspace_service: Arc<WorkspaceService>,
+    pub workspace_service: Arc<dyn WorkspaceService + Sync + Send>,
+    pub schema_migrator: Arc<AuthorizationWorkspaceSchemaMigrator>,
 }
 
 impl Application {
     pub async fn init(config: &ApplicationConfig) -> anyhow::Result<Self> {
         let database_connection = init_database_connection(config).await?;
+        let auth_method = create_database_auth_method(config);
+        let schema_migrator = Arc::new(AuthorizationWorkspaceSchemaMigrator::new(
+            config.database.host.to_owned(),
+            config.database.port,
+            config.database.database_name.to_owned(),
+            auth_method.clone(),
+        ));
 
         match config.workspace {
             WorkspaceConfig::Static(StaticWorkspaceConfig { ref name }) => {
-                database::migrate_workspace(
-                    name,
-                    &config.database.host,
-                    config.database.port,
-                    &config.database.database_name,
-                    &create_database_auth_method(config),
-                )
-                .await?;
+                schema_migrator.migrate(name).await?;
             }
             WorkspaceConfig::Claim(_) => {
-                database::migrate_all_workspaces(
+                database::migrate_all_authorization_workspaces(
                     &database_connection.begin().await?,
                     &config.database.host,
                     config.database.port,
@@ -89,13 +88,8 @@ impl Application {
                 kid,
             )),
             machine_identity_service: Arc::new(MachineIdentityService {}),
-            workspace_service: Arc::new(WorkspaceService::new(
-                database_connection.clone(),
-                config.database.host.to_owned(),
-                config.database.port,
-                config.database.database_name.to_owned(),
-                create_database_auth_method(config),
-            )),
+            workspace_service: Arc::new(WorkspaceServiceImpl::default()),
+            schema_migrator,
         })
     }
 }

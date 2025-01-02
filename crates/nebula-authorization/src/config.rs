@@ -1,5 +1,6 @@
 use config::{Config, File, FileFormat};
 use nebula_config_path::config_dir;
+use nebula_domain::connector::saml::{AttributesConfig, SAMLAdminRoleConfig, WorkspaceConfig};
 use nebula_token::jwk::jwk_set::JwkSet;
 use serde::Deserialize;
 use url::Url;
@@ -49,42 +50,11 @@ pub struct SAMLConfig {
     pub admin_role: SAMLAdminRoleConfig,
 }
 
-#[derive(Deserialize, Debug, Clone)]
-#[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum AttributesConfig {
-    All,
-    Mapping { claims: Vec<(String, String)> },
-}
-
-#[derive(Deserialize, Debug, Clone)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE", tag = "type")]
-pub(crate) enum SAMLAdminRoleConfig {
-    All,
-    Group { attribute_name: String, admin_groups: Vec<String> },
-}
-
 #[derive(Deserialize, Debug)]
 pub struct TokenConfig {
     pub lifetime: u64,
     pub jwks: Option<JwkSet>,
     pub jwk_kid: Option<String>,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-#[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum WorkspaceConfig {
-    Static(StaticWorkspaceConfig),
-    Claim(ClaimWorkspaceConfig),
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct StaticWorkspaceConfig {
-    pub name: String,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct ClaimWorkspaceConfig {
-    pub claim: String,
 }
 
 #[derive(Deserialize, Debug)]

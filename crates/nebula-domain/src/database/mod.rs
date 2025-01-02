@@ -23,22 +23,29 @@ use sea_orm::{
 use ulid::Ulid;
 use url::Url;
 
-pub use migration::migrate;
-pub use workspace_migration::{migrate_all_workspaces, migrate_workspace};
+pub use authorization_workspace_migration::{migrate_all_authorization_workspaces, migrate_authorization_workspace};
+pub use backbone_migration::migrate;
+pub use backbone_workspace_migration::{migrate_all_backbone_workspaces, migrate_backbone_workspace};
 
 pub mod applied_path_policy;
 pub mod applied_path_policy_allowed_action;
 pub mod applied_policy;
 pub mod authority;
-mod migration;
+mod authorization_workspace_migration;
+mod backbone_migration;
+mod backbone_workspace_migration;
+pub(crate) mod machine_identity;
+pub(crate) mod machine_identity_attribute;
+pub(crate) mod machine_identity_token;
 pub mod parameter;
 pub mod path;
 pub mod policy;
 pub mod secret_metadata;
 pub mod secret_value;
+pub(crate) mod types;
 pub mod workspace;
-mod workspace_migration;
 
+#[derive(Clone)]
 pub enum AuthMethod {
     Credential { username: String, password: Option<String> },
     RdsIamAuth { host: String, port: u16, username: String },
@@ -187,7 +194,7 @@ impl WorkspaceScopedTransaction for DatabaseConnection {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
 pub struct UlidId(Ulid);
 
 impl UlidId {
@@ -297,4 +304,90 @@ pub trait Persistable {
     type Error;
 
     async fn persist(self, transaction: &DatabaseTransaction) -> std::result::Result<(), Self::Error>;
+}
+
+pub struct BackboneWorkspaceSchemaMigrator {
+    connection: Arc<DatabaseConnection>,
+    database_host: String,
+    database_port: u16,
+    database_name: String,
+    database_auth: AuthMethod,
+}
+
+impl BackboneWorkspaceSchemaMigrator {
+    pub fn new(
+        connection: Arc<DatabaseConnection>,
+        database_host: String,
+        database_port: u16,
+        database_name: String,
+        database_auth: AuthMethod,
+    ) -> Self {
+        Self { connection, database_host, database_port, database_name, database_auth }
+    }
+
+    #[cfg(not(any(test, feature = "testing")))]
+    pub async fn init_new_schema(&self, workspace_name: &str) -> anyhow::Result<()> {
+        self.connection
+            .execute(Statement::from_string(
+                DatabaseBackend::Postgres,
+                format!("CREATE SCHEMA IF NOT EXISTS \"{workspace_name}\";"),
+            ))
+            .await?;
+
+        self.migrate(workspace_name).await
+    }
+
+    #[cfg(any(test, feature = "testing"))]
+    pub async fn init_new_schema(&self, _workspace_name: &str) -> anyhow::Result<()> {
+        use tracing::debug;
+
+        debug!("workspace initialization not supported in test environment");
+
+        Ok(())
+    }
+
+    #[cfg(not(any(test, feature = "testing")))]
+    pub async fn migrate(&self, workspace_name: &str) -> anyhow::Result<()> {
+        migrate_backbone_workspace(
+            workspace_name,
+            &self.database_host,
+            self.database_port,
+            &self.database_name,
+            &self.database_auth,
+        )
+        .await
+    }
+
+    #[cfg(any(test, feature = "testing"))]
+    pub async fn migrate(&self, _workspace_name: &str) -> anyhow::Result<()> {
+        use tracing::debug;
+
+        debug!("workspace migration not supported in test environment");
+
+        Ok(())
+    }
+}
+
+pub struct AuthorizationWorkspaceSchemaMigrator {
+    database_host: String,
+    database_port: u16,
+    database_name: String,
+    database_auth: AuthMethod,
+}
+
+impl AuthorizationWorkspaceSchemaMigrator {
+    pub fn new(database_host: String, database_port: u16, database_name: String, database_auth: AuthMethod) -> Self {
+        Self { database_host, database_port, database_name, database_auth }
+    }
+
+    pub async fn migrate(&self, workspace_name: &str) -> anyhow::Result<()> {
+        migrate_authorization_workspace(
+            workspace_name,
+            &self.database_host,
+            self.database_port,
+            &self.database_name,
+            &self.database_auth,
+        )
+        .await
+    }
 }
