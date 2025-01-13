@@ -13,7 +13,7 @@ use crate::{
 };
 
 use super::{
-    backbone::{BackboneService, WorkspaceBackboneService},
+    backbone::{BackboneService, BackboneServiceImpl},
     key_pair::{FileKeyPairService, KeyPair, KeyVersion, PostgresKeyPairService, ShieldedKeyPairService},
 };
 
@@ -39,13 +39,13 @@ impl Authority {
         };
 
         let backbone_service: Arc<dyn BackboneService + Send + Sync> =
-            Arc::new(WorkspaceBackboneService::new(config.backbone.host.clone()));
+            Arc::new(BackboneServiceImpl::new(config.backbone.host.clone()));
         Ok(Self { name: config.authority.name.clone(), key_pair_service, backbone_service })
     }
 
-    pub async fn key_pair(&self, workspace_name: &str) -> Result<(KeyPair, KeyVersion)> {
-        let gp = self.backbone_service.global_params(workspace_name).await?;
-        let name = &format!("{}-{}", self.name, workspace_name);
+    pub async fn key_pair(&self) -> Result<(KeyPair, KeyVersion)> {
+        let gp = self.backbone_service.global_params().await?;
+        let name = &self.name;
         let key_pair = match self.key_pair_service.latest_key_pair(name).await? {
             Some(key_pair) => key_pair,
             None => self.key_pair_service.generate_latest_key_pair(&gp, name).await?,
@@ -54,8 +54,8 @@ impl Authority {
         Ok(key_pair)
     }
 
-    pub async fn key_pair_by_version(&self, workspace_name: &str, version: KeyVersion) -> Result<KeyPair> {
-        let name = &format!("{}-{}", self.name, workspace_name);
+    pub async fn key_pair_by_version(&self, version: KeyVersion) -> Result<KeyPair> {
+        let name = &self.name;
         let key_pair = match self.key_pair_service.key_pair_by_version(name, version).await? {
             Some(key_pair) => key_pair,
             None => {
@@ -66,8 +66,8 @@ impl Authority {
         Ok(key_pair)
     }
 
-    pub async fn key_pair_rolling(&self, gp: &GlobalParams<Bn462Curve>, workspace_name: &str) -> Result<KeyVersion> {
-        let name = &format!("{}-{}", self.name, workspace_name);
+    pub async fn key_pair_rolling(&self, gp: &GlobalParams<Bn462Curve>) -> Result<KeyVersion> {
+        let name = &self.name;
         let (_, version) = self.key_pair_service.generate_latest_key_pair(gp, name).await?;
         Ok(version)
     }

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, Request},
+    extract::Request,
     http::header::{AUTHORIZATION, CONTENT_TYPE, LINK},
     middleware::{self, Next},
     response::Response,
@@ -13,7 +13,7 @@ use nebula_token::{
     claim::{NebulaClaim, Role},
 };
 use reqwest::StatusCode;
-use serde::Deserialize;
+
 use tower_http::cors::AllowOrigin;
 use tower_http::cors::Any;
 use tower_http::cors::CorsLayer;
@@ -39,21 +39,13 @@ impl From<ApplicationConfig> for ServerConfig {
 pub(super) async fn run(application: Application, config: ServerConfig) -> anyhow::Result<()> {
     let application = Arc::new(application);
     let protected_router = Router::new()
-        .nest(
-            "/workspaces/:workspace_name/",
-            router::userkey::router(application.clone()).route_layer(middleware::from_fn(check_workspace_name)),
-        )
-        .nest(
-            "/workspaces/:workspace_name/",
-            router::keypair::router(application.clone())
-                .route_layer(middleware::from_fn(check_admin_role))
-                .route_layer(middleware::from_fn(check_workspace_name)),
-        )
+        .merge(router::userkey::router(application.clone()))
+        .merge(router::keypair::router(application.clone()).route_layer(middleware::from_fn(check_admin_role)))
         .layer(NebulaAuthLayer::builder().jwk_discovery(application.jwks_discovery.clone()).build());
     let public_router = Router::new()
-        .nest("/workspaces/:workspace_name/", router::pubkey::router(application.clone()))
-        .nest("/", router::init::router(application.clone()))
-        .nest("/", router::disarm::router(application.clone()));
+        .merge(router::pubkey::router(application.clone()))
+        .merge(router::init::router(application.clone()))
+        .merge(router::disarm::router(application.clone()));
 
     let app = Router::new().route("/health", get(|| async { "OK" }));
     let app = if let Some(path_prefix) = config.path_prefix {
@@ -92,24 +84,6 @@ pub(super) async fn run(application: Application, config: ServerConfig) -> anyho
     debug!("starting authority server on {}", config.port);
     axum::serve(listener, app).await?;
     Ok(())
-}
-
-#[derive(Deserialize)]
-pub(crate) struct WorkspaceParams {
-    pub workspace_name: String,
-}
-
-pub(crate) async fn check_workspace_name(
-    Path(WorkspaceParams { workspace_name }): Path<WorkspaceParams>,
-    Extension(claim): Extension<NebulaClaim>,
-    req: Request,
-    next: Next,
-) -> Result<Response, StatusCode> {
-    if workspace_name == claim.workspace_name {
-        Ok(next.run(req).await)
-    } else {
-        Err(StatusCode::FORBIDDEN)
-    }
 }
 
 pub(crate) async fn check_admin_role(

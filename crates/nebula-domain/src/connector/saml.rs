@@ -27,23 +27,6 @@ pub enum SAMLAdminRoleConfig {
     Group { attribute_name: String, admin_groups: Vec<String> },
 }
 
-#[derive(Deserialize, Debug, Clone)]
-#[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum WorkspaceConfig {
-    Static(StaticWorkspaceConfig),
-    Claim(ClaimWorkspaceConfig),
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct StaticWorkspaceConfig {
-    pub name: String,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct ClaimWorkspaceConfig {
-    pub claim: String,
-}
-
 #[derive(Builder)]
 #[builder(on(String, into))]
 pub struct SAMLConnertorConfig {
@@ -55,7 +38,6 @@ pub struct SAMLConnertorConfig {
     name_id_policy_format: NameIdFormat,
     ca: openssl::x509::X509,
     attributes_config: AttributesConfig,
-    workspace_config: WorkspaceConfig,
     admin_role_config: SAMLAdminRoleConfig,
 }
 
@@ -64,7 +46,6 @@ pub struct SAMLConnector {
     pub redirect_uri: String,
     service_provider: ServiceProvider,
     attributes_config: AttributesConfig,
-    workspace_config: WorkspaceConfig,
     admin_role_config: SAMLAdminRoleConfig,
 }
 
@@ -157,7 +138,6 @@ impl SAMLConnector {
             sso_url: config.sso_url,
             redirect_uri: config.redirect_uri,
             attributes_config: config.attributes_config,
-            workspace_config: config.workspace_config,
             admin_role_config: config.admin_role_config,
         })
     }
@@ -201,12 +181,6 @@ impl SAMLConnector {
                 })
                 .collect::<HashMap<_, _>>()),
         }?;
-        let workspace_name = match self.workspace_config {
-            WorkspaceConfig::Static(ref config) => config.name.clone(),
-            WorkspaceConfig::Claim(ref config) => {
-                claims.get(&config.claim).cloned().ok_or(SAMLHandlerError::AttributeNotFound)?
-            }
-        };
 
         let role = match &self.admin_role_config {
             SAMLAdminRoleConfig::All => Role::Admin,
@@ -218,7 +192,7 @@ impl SAMLConnector {
             }
         };
 
-        Ok(Identity { user_id, claims, workspace_name, role })
+        Ok(Identity { user_id, claims, role })
     }
 }
 

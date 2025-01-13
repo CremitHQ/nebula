@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
@@ -23,24 +23,19 @@ pub(crate) fn router(application: Arc<Application>) -> axum::Router {
 }
 
 async fn handle_get_user_key(
-    Path(workspace_name): Path<String>,
     Query(query_params): Query<GetUserKeyQueryParam>,
     State(application): State<Arc<Application>>,
     Extension(claim): Extension<NebulaClaim>,
 ) -> Result<impl IntoResponse, GetUserKeyError> {
     let (key_pair, version) = if let Some(version) = query_params.version {
-        application.authority.key_pair_by_version(&workspace_name, version).await.map(|key_pair| (key_pair, version))
+        application.authority.key_pair_by_version(version).await.map(|key_pair| (key_pair, version))
     } else {
-        application.authority.key_pair(&workspace_name).await
+        application.authority.key_pair().await
     }
     .map_err(|_| GetUserKeyError::GetUserKey)?;
 
-    let gp = application
-        .authority
-        .backbone_service
-        .global_params(&workspace_name)
-        .await
-        .map_err(|_| GetUserKeyError::GetGlobalParams)?;
+    let gp =
+        application.authority.backbone_service.global_params().await.map_err(|_| GetUserKeyError::GetGlobalParams)?;
 
     let mut rng = MiraclRng::new();
     let mut seed = [0u8; 64];
