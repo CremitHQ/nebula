@@ -6,8 +6,6 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use crate::workspace::validate_workspace_name;
-use anyhow::bail;
 use async_trait::async_trait;
 use aws_config::BehaviorVersion;
 use aws_credential_types::provider::ProvideCredentials;
@@ -16,24 +14,19 @@ use aws_sigv4::{
     sign::v4::SigningParams,
 };
 use sea_orm::sqlx::postgres::PgConnectOptions;
-use sea_orm::{
-    ConnectOptions, ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, DatabaseTransaction, DbErr,
-    Statement, TransactionTrait, TryFromU64, TryGetError,
-};
+use sea_orm::{ConnectOptions, Database, DatabaseConnection, DatabaseTransaction, DbErr, TryFromU64, TryGetError};
 use ulid::Ulid;
 use url::Url;
 
-pub use authorization_workspace_migration::{migrate_all_authorization_workspaces, migrate_authorization_workspace};
-pub use backbone_migration::migrate;
-pub use backbone_workspace_migration::{migrate_all_backbone_workspaces, migrate_backbone_workspace};
+pub use authorization_migration::migrate_authorization;
+pub use backbone_migration::migrate_backbone;
 
 pub mod applied_path_policy;
 pub mod applied_path_policy_allowed_action;
 pub mod applied_policy;
 pub mod authority;
-mod authorization_workspace_migration;
+mod authorization_migration;
 mod backbone_migration;
-mod backbone_workspace_migration;
 pub(crate) mod machine_identity;
 pub(crate) mod machine_identity_attribute;
 pub(crate) mod machine_identity_token;
@@ -43,7 +36,6 @@ pub mod policy;
 pub mod secret_metadata;
 pub mod secret_value;
 pub(crate) mod types;
-pub mod workspace;
 
 #[derive(Clone)]
 pub enum AuthMethod {
@@ -130,9 +122,6 @@ async fn connect_to_database_with_search_path(
     };
 
     if let Some(search_path) = search_path {
-        if !validate_workspace_name(search_path) {
-            bail!("workspace slug is invalid");
-        }
         options.set_schema_search_path(format!(r#""{search_path}""#));
     }
 
@@ -169,29 +158,6 @@ fn reassign_token_periodically_to_database(
             }
         }
     });
-}
-
-#[async_trait]
-pub trait WorkspaceScopedTransaction {
-    async fn begin_with_workspace_scope(&self, workspace_slug: &str) -> Result<DatabaseTransaction, DbErr>;
-}
-
-#[async_trait]
-impl WorkspaceScopedTransaction for DatabaseConnection {
-    async fn begin_with_workspace_scope(&self, workspace_slug: &str) -> Result<DatabaseTransaction, DbErr> {
-        let transaction = self.begin().await?;
-        if !validate_workspace_name(workspace_slug) {
-            return Err(DbErr::Custom("workspace slug is invalid".to_string()));
-        }
-        transaction
-            .execute(Statement::from_string(
-                DatabaseBackend::Postgres,
-                format!("SET LOCAL search_path TO \"{workspace_slug}\", \"public\";"),
-            ))
-            .await?;
-
-        Ok(transaction)
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
@@ -306,7 +272,7 @@ pub trait Persistable {
     async fn persist(self, transaction: &DatabaseTransaction) -> std::result::Result<(), Self::Error>;
 }
 
-pub struct BackboneWorkspaceSchemaMigrator {
+pub struct BackboneSchemaMigrator {
     connection: Arc<DatabaseConnection>,
     database_host: String,
     database_port: u16,
@@ -314,7 +280,7 @@ pub struct BackboneWorkspaceSchemaMigrator {
     database_auth: AuthMethod,
 }
 
-impl BackboneWorkspaceSchemaMigrator {
+impl BackboneSchemaMigrator {
     pub fn new(
         connection: Arc<DatabaseConnection>,
         database_host: String,
@@ -326,40 +292,12 @@ impl BackboneWorkspaceSchemaMigrator {
     }
 
     #[cfg(not(any(test, feature = "testing")))]
-    pub async fn init_new_schema(&self, workspace_name: &str) -> anyhow::Result<()> {
-        self.connection
-            .execute(Statement::from_string(
-                DatabaseBackend::Postgres,
-                format!("CREATE SCHEMA IF NOT EXISTS \"{workspace_name}\";"),
-            ))
-            .await?;
-
-        self.migrate(workspace_name).await
+    pub async fn migrate(&self) -> anyhow::Result<()> {
+        migrate_backbone(&self.database_host, self.database_port, &self.database_name, &self.database_auth).await
     }
 
     #[cfg(any(test, feature = "testing"))]
-    pub async fn init_new_schema(&self, _workspace_name: &str) -> anyhow::Result<()> {
-        use tracing::debug;
-
-        debug!("workspace initialization not supported in test environment");
-
-        Ok(())
-    }
-
-    #[cfg(not(any(test, feature = "testing")))]
-    pub async fn migrate(&self, workspace_name: &str) -> anyhow::Result<()> {
-        migrate_backbone_workspace(
-            workspace_name,
-            &self.database_host,
-            self.database_port,
-            &self.database_name,
-            &self.database_auth,
-        )
-        .await
-    }
-
-    #[cfg(any(test, feature = "testing"))]
-    pub async fn migrate(&self, _workspace_name: &str) -> anyhow::Result<()> {
+    pub async fn migrate(&self) -> anyhow::Result<()> {
         use tracing::debug;
 
         debug!("workspace migration not supported in test environment");
@@ -368,26 +306,19 @@ impl BackboneWorkspaceSchemaMigrator {
     }
 }
 
-pub struct AuthorizationWorkspaceSchemaMigrator {
+pub struct AuthorizationSchemaMigrator {
     database_host: String,
     database_port: u16,
     database_name: String,
     database_auth: AuthMethod,
 }
 
-impl AuthorizationWorkspaceSchemaMigrator {
+impl AuthorizationSchemaMigrator {
     pub fn new(database_host: String, database_port: u16, database_name: String, database_auth: AuthMethod) -> Self {
         Self { database_host, database_port, database_name, database_auth }
     }
 
-    pub async fn migrate(&self, workspace_name: &str) -> anyhow::Result<()> {
-        migrate_authorization_workspace(
-            workspace_name,
-            &self.database_host,
-            self.database_port,
-            &self.database_name,
-            &self.database_auth,
-        )
-        .await
+    pub async fn migrate(&self) -> anyhow::Result<()> {
+        migrate_authorization(&self.database_host, self.database_port, &self.database_name, &self.database_auth).await
     }
 }
