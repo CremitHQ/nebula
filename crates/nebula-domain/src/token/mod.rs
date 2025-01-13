@@ -2,7 +2,7 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::Result;
 use nebula_token::{
-    claim::{ATTRIBUTES_CLAIM, ROLE_CLAIM, WORKSPACE_NAME_CLAIM},
+    claim::{ATTRIBUTES_CLAIM, ROLE_CLAIM},
     jwk::jwk_set::JwkSet,
     jwt::Jwt,
     JwsHeader, JwtPayload, Map, Value,
@@ -41,7 +41,6 @@ impl TokenService {
         )?;
         jwt_payload.set_subject(&identity.user_id);
         jwt_payload.set_issuer(ISSUER);
-        jwt_payload.set_claim(WORKSPACE_NAME_CLAIM, Some(identity.workspace_name.clone().into())).unwrap();
         jwt_payload.set_claim(ROLE_CLAIM, Some(String::from(identity.role.clone()).into())).unwrap();
 
         let now = SystemTime::now();

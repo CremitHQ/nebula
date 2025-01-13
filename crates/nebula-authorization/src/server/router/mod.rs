@@ -24,51 +24,45 @@ use ulid::Ulid;
 use crate::application::Application;
 
 use nebula_domain::{
-    self as domain,
     connector::Identity,
-    database::{Persistable, WorkspaceScopedTransaction},
+    database::Persistable,
     machine_identity::{self, MachineIdentity, MachineIdentityToken},
 };
 
 pub(crate) fn router(application: Arc<Application>) -> axum::Router {
     let public_router = Router::new()
-        .route("/workspaces", post(handle_post_workspace))
         .route("/login/:connector", get(handle_connector_login))
-        .route("/workspaces/:workspace_name/machine-identities/login", get(handle_machine_identity_login))
+        .route("/machine-identities/login", get(handle_machine_identity_login))
         .route("/callback/saml", post(handle_saml_connector_callback))
         .route("/jwks", get(handle_jwks))
         .with_state(application.clone());
 
     let private_router = Router::new()
+        .route("/machine-identities", get(handle_get_machine_identities).post(handle_post_machine_identity))
+        .route("/machine-identities/:machine_identity_id", get(handle_get_machine_identity))
         .route(
-            "/workspaces/:workspace_name/machine-identities",
-            get(handle_get_machine_identities).post(handle_post_machine_identity),
-        )
-        .route("/workspaces/:workspace_name/machine-identities/:machine_identity_id", get(handle_get_machine_identity))
-        .route(
-            "/workspaces/:workspace_name/machine-identities/:machine_identity_id",
+            "/machine-identities/:machine_identity_id",
             patch(handle_patch_machine_identity).route_layer(middleware::from_fn(check_admin_role)),
         )
         .route(
-            "/workspaces/:workspace_name/machine-identities/:machine_identity_id",
+            "/machine-identities/:machine_identity_id",
             delete(handle_delete_machine_identity).route_layer(middleware::from_fn_with_state(
                 application.clone(),
                 check_machine_identity_owner_or_admin_role,
             )),
         )
         .route(
-            "/workspaces/:workspace_name/machine-identities/:machine_identity_id/tokens",
+            "/machine-identities/:machine_identity_id/tokens",
             get(handle_get_machine_identity_tokens).post(handle_post_machine_identity_token).route_layer(
                 middleware::from_fn_with_state(application.clone(), check_machine_identity_owner_or_admin_role),
             ),
         )
         .route(
-            "/workspaces/:workspace_name/machine-identities/:machine_identity_id/tokens/:machine_identity_token_id",
+            "/machine-identities/:machine_identity_id/tokens/:machine_identity_token_id",
             get(handle_get_machine_identity_token).delete(handle_delete_machine_identity_token).route_layer(
                 middleware::from_fn_with_state(application.clone(), check_machine_identity_owner_or_admin_role),
             ),
         )
-        .route_layer(middleware::from_fn(check_workspace_name))
         .layer(
             NebulaAuthLayer::builder()
                 .jwk_discovery(Arc::new(StaticJwksDiscovery::new(application.token_service.jwks.clone())))
@@ -77,24 +71,6 @@ pub(crate) fn router(application: Arc<Application>) -> axum::Router {
         .with_state(application);
 
     Router::new().merge(public_router).merge(private_router)
-}
-
-#[derive(Deserialize)]
-pub(crate) struct WorkspaceParams {
-    pub workspace_name: String,
-}
-
-pub(crate) async fn check_workspace_name(
-    Path(WorkspaceParams { workspace_name }): Path<WorkspaceParams>,
-    Extension(claim): Extension<NebulaClaim>,
-    req: Request,
-    next: Next,
-) -> Result<Response, StatusCode> {
-    if workspace_name == claim.workspace_name {
-        Ok(next.run(req).await)
-    } else {
-        Err(StatusCode::FORBIDDEN)
-    }
 }
 
 pub(crate) async fn check_admin_role(
@@ -109,8 +85,13 @@ pub(crate) async fn check_admin_role(
     }
 }
 
+#[derive(Deserialize)]
+pub(crate) struct MachineIdentityPath {
+    machine_identity_id: Ulid,
+}
+
 pub(crate) async fn check_machine_identity_owner_or_admin_role(
-    Path((_, machine_identity_id)): Path<(String, Ulid)>,
+    Path(MachineIdentityPath { machine_identity_id }): Path<MachineIdentityPath>,
     Extension(claim): Extension<NebulaClaim>,
     State(application): State<Arc<Application>>,
     req: Request,
@@ -120,11 +101,7 @@ pub(crate) async fn check_machine_identity_owner_or_admin_role(
         return Ok(next.run(req).await);
     }
 
-    let transaction = application
-        .database_connection
-        .begin_with_workspace_scope(&claim.workspace_name)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let transaction = application.database_connection.begin().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let machine_identity = application
         .machine_identity_service
         .get_machine_identity(&transaction, &machine_identity_id)
@@ -142,11 +119,10 @@ pub(crate) async fn check_machine_identity_owner_or_admin_role(
 const TOKEN_HEADER_NAME: &str = "token";
 
 async fn handle_machine_identity_login(
-    Path(workspace_name): Path<String>,
     headers: HeaderMap,
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, MachineIdentityLoginError> {
-    let transaction = application.database_connection.begin_with_workspace_scope(&workspace_name).await?;
+    let transaction = application.database_connection.begin().await?;
 
     let machine_token = headers
         .get(TOKEN_HEADER_NAME)
@@ -162,7 +138,7 @@ async fn handle_machine_identity_login(
 
     transaction.commit().await?;
 
-    let identity = Identity::new(token.id.into(), workspace_name, Role::Member, token.attributes.into_iter().collect());
+    let identity = Identity::new(token.id.into(), Role::Member, token.attributes.into_iter().collect());
     let jwt =
         application.token_service.create_jwt(&identity).map_err(|_| MachineIdentityLoginError::FailedToCreateJWT)?;
 
@@ -200,52 +176,6 @@ pub enum MachineIdentityLoginError {
 #[serde(rename_all = "camelCase")]
 pub struct MachineIdentityLoginResponse {
     pub access_token: Jwt,
-}
-
-#[derive(Error, Debug, ErrorStatus)]
-enum WorkspaceError {
-    #[error("Workspace name is already in used")]
-    #[status(StatusCode::CONFLICT)]
-    WorkspaceNameConflicted,
-    #[error("Invalid workspace name")]
-    #[status(StatusCode::BAD_REQUEST)]
-    InvalidWorkspaceName,
-    #[error("Unhandled error is occurred")]
-    #[status(StatusCode::INTERNAL_SERVER_ERROR)]
-    UnhandledError(#[from] anyhow::Error),
-    #[error("Error occurrred by database")]
-    #[status(StatusCode::INTERNAL_SERVER_ERROR)]
-    DatabaseError(#[from] DbErr),
-}
-
-impl From<domain::workspace::Error> for WorkspaceError {
-    fn from(value: domain::workspace::Error) -> Self {
-        match value {
-            domain::workspace::Error::WorkspaceNameConflicted => Self::WorkspaceNameConflicted,
-            domain::workspace::Error::InvalidWorkspaceName => Self::InvalidWorkspaceName,
-            domain::workspace::Error::Anyhow(e) => e.into(),
-        }
-    }
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct PostWorkspaceRequest {
-    pub name: String,
-}
-
-async fn handle_post_workspace(
-    State(application): State<Arc<Application>>,
-    Json(payload): Json<PostWorkspaceRequest>,
-) -> Result<impl IntoResponse, WorkspaceError> {
-    let transaction = application.database_connection.begin().await?;
-
-    application.workspace_service.create(&transaction, &payload.name).await?;
-    application.schema_migrator.migrate(&payload.name).await?;
-
-    transaction.commit().await?;
-
-    Ok(StatusCode::CREATED)
 }
 
 #[derive(Deserialize)]
@@ -387,12 +317,11 @@ impl From<machine_identity::Error> for MachineIdentityError {
 
 async fn handle_post_machine_identity(
     OriginalUri(uri): OriginalUri,
-    Path(workspace_name): Path<String>,
     State(application): State<Arc<Application>>,
     Extension(claim): Extension<NebulaClaim>,
     Json(payload): Json<PostMachineIdentityRequest>,
 ) -> Result<impl IntoResponse, MachineIdentityError> {
-    let transaction = application.database_connection.begin_with_workspace_scope(&workspace_name).await?;
+    let transaction = application.database_connection.begin().await?;
 
     let result =
         application.machine_identity_service.register_machine_identity(&transaction, &claim, &payload.label).await?;
@@ -444,10 +373,9 @@ impl From<MachineIdentity> for MachineIdentityResponse {
 }
 
 async fn handle_get_machine_identities(
-    Path(workspace_name): Path<String>,
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, MachineIdentityError> {
-    let transaction = application.database_connection.begin_with_workspace_scope(&workspace_name).await?;
+    let transaction = application.database_connection.begin().await?;
 
     let machine_identities = application.machine_identity_service.get_machine_identities(&transaction).await?;
 
@@ -471,10 +399,10 @@ async fn get_machine_identity(
 }
 
 async fn handle_get_machine_identity(
-    Path((workspace_name, machine_identity_id)): Path<(String, Ulid)>,
+    Path(machine_identity_id): Path<Ulid>,
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, MachineIdentityError> {
-    let transaction = application.database_connection.begin_with_workspace_scope(&workspace_name).await?;
+    let transaction = application.database_connection.begin().await?;
 
     let machine_identity = get_machine_identity(&application, &transaction, &machine_identity_id).await?;
 
@@ -491,11 +419,11 @@ struct PatchMachineIdentityRequest {
 }
 
 async fn handle_patch_machine_identity(
-    Path((workspace_name, machine_identity_id)): Path<(String, Ulid)>,
+    Path(machine_identity_id): Path<Ulid>,
     State(application): State<Arc<Application>>,
     Json(payload): Json<PatchMachineIdentityRequest>,
 ) -> Result<impl IntoResponse, MachineIdentityError> {
-    let transaction = application.database_connection.begin_with_workspace_scope(&workspace_name).await?;
+    let transaction = application.database_connection.begin().await?;
 
     let mut machine_identity = get_machine_identity(&application, &transaction, &machine_identity_id).await?;
 
@@ -512,10 +440,10 @@ async fn handle_patch_machine_identity(
 }
 
 async fn handle_delete_machine_identity(
-    Path((workspace_name, machine_identity_id)): Path<(String, Ulid)>,
+    Path(machine_identity_id): Path<Ulid>,
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, MachineIdentityError> {
-    let transaction = application.database_connection.begin_with_workspace_scope(&workspace_name).await?;
+    let transaction = application.database_connection.begin().await?;
 
     let mut machine_identity = get_machine_identity(&application, &transaction, &machine_identity_id).await?;
 
@@ -541,10 +469,10 @@ impl From<MachineIdentityToken> for MachineIdentityTokenResponse {
 }
 
 async fn handle_get_machine_identity_tokens(
-    Path((workspace_name, machine_identity_id)): Path<(String, Ulid)>,
+    Path(machine_identity_id): Path<Ulid>,
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, MachineIdentityError> {
-    let transaction = application.database_connection.begin_with_workspace_scope(&workspace_name).await?;
+    let transaction = application.database_connection.begin().await?;
 
     let machine_identity = get_machine_identity(&application, &transaction, &machine_identity_id).await?;
     let tokens =
@@ -558,10 +486,10 @@ async fn handle_get_machine_identity_tokens(
 }
 
 async fn handle_post_machine_identity_token(
-    Path((workspace_name, machine_identity_id)): Path<(String, Ulid)>,
+    Path(machine_identity_id): Path<Ulid>,
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, MachineIdentityError> {
-    let transaction = application.database_connection.begin_with_workspace_scope(&workspace_name).await?;
+    let transaction = application.database_connection.begin().await?;
 
     let machine_identity = get_machine_identity(&application, &transaction, &machine_identity_id).await?;
     application.machine_identity_service.create_new_machine_identity_token(&transaction, &machine_identity).await?;
@@ -572,10 +500,10 @@ async fn handle_post_machine_identity_token(
 }
 
 async fn handle_get_machine_identity_token(
-    Path((workspace_name, machine_identity_id, machine_identity_token_id)): Path<(String, Ulid, Ulid)>,
+    Path((machine_identity_id, machine_identity_token_id)): Path<(Ulid, Ulid)>,
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, MachineIdentityError> {
-    let transaction = application.database_connection.begin_with_workspace_scope(&workspace_name).await?;
+    let transaction = application.database_connection.begin().await?;
 
     let machine_identity = get_machine_identity(&application, &transaction, &machine_identity_id).await?;
 
@@ -595,10 +523,10 @@ async fn handle_get_machine_identity_token(
 }
 
 async fn handle_delete_machine_identity_token(
-    Path((workspace_name, machine_identity_id, machine_identity_token_id)): Path<(String, Ulid, Ulid)>,
+    Path((machine_identity_id, machine_identity_token_id)): Path<(Ulid, Ulid)>,
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, MachineIdentityError> {
-    let transaction = application.database_connection.begin_with_workspace_scope(&workspace_name).await?;
+    let transaction = application.database_connection.begin().await?;
 
     let machine_identity = get_machine_identity(&application, &transaction, &machine_identity_id).await?;
     let mut token = application
