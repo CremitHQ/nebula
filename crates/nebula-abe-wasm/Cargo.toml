@@ -25,3 +25,8 @@ rmp-serde.workspace = true
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.34"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(wasm_bindgen_unstable_test_coverage)',
+] }

@@ -54,7 +54,7 @@ rmp-serde = "1.3"
 reqwest = "0.12.8"
 base64 = "0.22"
 sqlx = "0.8"
-bon = "2.3"
+bon = "3.3"
 directories = "5.0"
 validator = { version = "0.19", features = ["derive"] }
 openssl = "0.10"
