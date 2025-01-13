@@ -1,25 +1,20 @@
 use std::{sync::Arc, time::Duration};
 
-use anyhow::bail;
 use nebula_token::auth::jwks_discovery::{CachedRemoteJwksDiscovery, JwksDiscovery};
 use parameter::{ParameterUseCase, ParameterUseCaseImpl};
-use sea_orm::{DatabaseConnection, TransactionTrait};
+use sea_orm::DatabaseConnection;
 
-use crate::config::{ApplicationConfig, WorkspaceConfig};
+use crate::config::ApplicationConfig;
 use nebula_domain::{
     authority::{AuthorityService, PostgresAuthorityService},
-    database::{self, connect_to_database, AuthMethod, BackboneWorkspaceSchemaMigrator},
+    database::{connect_to_database, AuthMethod, BackboneSchemaMigrator},
     parameter::{ParameterService, PostgresParameterService},
     policy::{PolicyService, PostgresPolicyService},
     secret::{PostgresSecretService, SecretService},
-    workspace::{WorkspaceService, WorkspaceServiceImpl},
 };
-
-use workspace::{WorkspaceUseCase, WorkspaceUseCaseImpl};
 
 use self::{
     authority::{AuthorityUseCase, AuthorityUseCaseImpl},
-    database::WorkspaceScopedTransaction,
     path::{PathUseCase, PathUseCaseImpl},
     policy::{PolicyUseCase, PolicyUseCaseImpl},
     secret::{SecretUseCase, SecretUseCaseImpl},
@@ -30,33 +25,19 @@ pub(crate) mod parameter;
 pub(crate) mod path;
 pub(crate) mod policy;
 pub(crate) mod secret;
-pub(crate) mod workspace;
 
 pub(crate) struct Application {
     database_connection: Arc<DatabaseConnection>,
-    workspace_service: Arc<WorkspaceServiceImpl>,
     secret_service: Arc<dyn SecretService + Sync + Send>,
     parameter_service: Arc<dyn ParameterService + Sync + Send>,
     policy_service: Arc<dyn PolicyService + Sync + Send>,
     authority_service: Arc<dyn AuthorityService + Sync + Send>,
     jwks_discovery: Arc<dyn JwksDiscovery + Send + Sync>,
-    schema_migrator: Arc<BackboneWorkspaceSchemaMigrator>,
 }
 
 impl Application {
-    pub fn workspace(&self) -> impl WorkspaceUseCase {
-        WorkspaceUseCaseImpl::new(
-            self.database_connection.clone(),
-            self.workspace_service.clone(),
-            self.secret_service.clone(),
-            self.parameter_service.clone(),
-            self.schema_migrator.clone(),
-        )
-    }
-
-    pub fn with_workspace(&self, workspace_name: &str) -> ApplicationWithWorkspace {
-        ApplicationWithWorkspace {
-            workspace_name: workspace_name.to_owned(),
+    pub fn with(&self) -> ApplicationWithUseCase {
+        ApplicationWithUseCase {
             database_connection: self.database_connection.clone(),
             secret_service: self.secret_service.clone(),
             parameter_service: self.parameter_service.clone(),
@@ -70,8 +51,7 @@ impl Application {
     }
 }
 
-pub(crate) struct ApplicationWithWorkspace {
-    workspace_name: String,
+pub(crate) struct ApplicationWithUseCase {
     database_connection: Arc<DatabaseConnection>,
     secret_service: Arc<dyn SecretService + Sync + Send>,
     parameter_service: Arc<dyn ParameterService + Sync + Send>,
@@ -79,10 +59,9 @@ pub(crate) struct ApplicationWithWorkspace {
     authority_service: Arc<dyn AuthorityService + Sync + Send>,
 }
 
-impl ApplicationWithWorkspace {
+impl ApplicationWithUseCase {
     pub fn secret(&self) -> impl SecretUseCase {
         SecretUseCaseImpl::new(
-            self.workspace_name.to_owned(),
             self.database_connection.clone(),
             self.secret_service.clone(),
             self.policy_service.clone(),
@@ -90,35 +69,19 @@ impl ApplicationWithWorkspace {
     }
 
     pub fn parameter(&self) -> impl ParameterUseCase {
-        ParameterUseCaseImpl::new(
-            self.workspace_name.to_owned(),
-            self.database_connection.clone(),
-            self.parameter_service.clone(),
-        )
+        ParameterUseCaseImpl::new(self.database_connection.clone(), self.parameter_service.clone())
     }
 
     pub fn policy(&self) -> impl PolicyUseCase {
-        PolicyUseCaseImpl::new(
-            self.workspace_name.to_owned(),
-            self.database_connection.clone(),
-            self.policy_service.clone(),
-        )
+        PolicyUseCaseImpl::new(self.database_connection.clone(), self.policy_service.clone())
     }
 
     pub fn path(&self) -> impl PathUseCase {
-        PathUseCaseImpl::new(
-            self.workspace_name.to_owned(),
-            self.database_connection.clone(),
-            self.secret_service.clone(),
-        )
+        PathUseCaseImpl::new(self.database_connection.clone(), self.secret_service.clone())
     }
 
     pub fn authority(&self) -> impl AuthorityUseCase {
-        AuthorityUseCaseImpl::new(
-            self.workspace_name.to_owned(),
-            self.database_connection.clone(),
-            self.authority_service.clone(),
-        )
+        AuthorityUseCaseImpl::new(self.database_connection.clone(), self.authority_service.clone())
     }
 }
 
@@ -133,62 +96,26 @@ pub(super) async fn init(config: &ApplicationConfig) -> anyhow::Result<Applicati
             Arc::new(CachedRemoteJwksDiscovery::new(config.jwks_url.clone(), Duration::from_secs(10)))
         };
 
-    let workspace_service = Arc::new(WorkspaceServiceImpl::default());
     let secret_service = Arc::new(PostgresSecretService {});
     let parameter_service = Arc::new(PostgresParameterService);
     let policy_service = Arc::new(PostgresPolicyService {});
     let authority_service = Arc::new(PostgresAuthorityService {});
-    let schema_migrator = Arc::new(BackboneWorkspaceSchemaMigrator::new(
+    let schema_migrator = Arc::new(BackboneSchemaMigrator::new(
         database_connection.clone(),
         config.database.host.to_owned(),
         config.database.port,
         config.database.database_name.to_owned(),
         auth_method.clone(),
     ));
-    nebula_domain::database::migrate(database_connection.as_ref()).await?;
-    match config.workspace {
-        WorkspaceConfig::Static { ref name } => {
-            let transaction = database_connection.begin_with_workspace_scope(name).await?;
-            match workspace_service.create(&transaction, name).await {
-                Ok(_) | Err(nebula_domain::workspace::Error::WorkspaceNameConflicted) => {}
-                Err(e) => {
-                    transaction.rollback().await?;
-                    bail!("Failed to create workspace: {:?}", e);
-                }
-            }
-            schema_migrator.migrate(name).await?;
-
-            match parameter_service.create(&transaction).await {
-                Ok(_) | Err(nebula_domain::parameter::Error::ParameterAlreadyCreated(_)) => {
-                    transaction.commit().await?;
-                }
-                Err(e) => {
-                    transaction.rollback().await?;
-                    bail!("Failed to create parameter: {:?}", e);
-                }
-            }
-        }
-        WorkspaceConfig::Dynamic => {
-            database::migrate_all_backbone_workspaces(
-                &database_connection.begin().await?,
-                &config.database.host,
-                config.database.port,
-                &config.database.database_name,
-                &create_database_auth_method(config),
-            )
-            .await?;
-        }
-    }
+    schema_migrator.migrate().await?;
 
     Ok(Application {
         database_connection,
-        workspace_service,
         secret_service,
         parameter_service,
         policy_service,
         authority_service,
         jwks_discovery,
-        schema_migrator,
     })
 }
 

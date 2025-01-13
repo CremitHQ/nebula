@@ -1,12 +1,6 @@
 use std::sync::Arc;
 
-use axum::{
-    extract::{Path, Request},
-    middleware::Next,
-    response::Response,
-    routing::get,
-    Extension, Router,
-};
+use axum::{extract::Request, middleware::Next, response::Response, routing::get, Extension, Router};
 use nebula_token::{
     auth::layer::NebulaAuthLayer,
     claim::{NebulaClaim, Role},
@@ -15,7 +9,6 @@ use reqwest::{
     header::{AUTHORIZATION, CONTENT_TYPE, LINK},
     StatusCode,
 };
-use serde::Deserialize;
 use tower_http::cors::AllowOrigin;
 use tower_http::cors::Any;
 use tower_http::cors::CorsLayer;
@@ -44,11 +37,9 @@ pub(super) async fn run(application: Application, config: ServerConfig) -> anyho
     let application = Arc::new(application);
     let public_router = Router::new()
         .route("/health", get(|| async { "" }))
-        .merge(router::workspace::public_router(application.clone()))
         .merge(router::parameter::public_router(application.clone()));
 
     let protected_router = Router::new()
-        .merge(router::workspace::router(application.clone()))
         .merge(router::secret::router(application.clone()))
         .merge(router::parameter::router(application.clone()))
         .merge(router::policy::router(application.clone()))
@@ -106,24 +97,6 @@ pub(crate) async fn check_member_role(
     next: Next,
 ) -> Result<Response, StatusCode> {
     if claim.role == Role::Member || claim.role == Role::Admin {
-        Ok(next.run(req).await)
-    } else {
-        Err(StatusCode::FORBIDDEN)
-    }
-}
-
-#[derive(Deserialize)]
-pub(crate) struct WorkspaceParams {
-    pub workspace_name: String,
-}
-
-pub(crate) async fn check_workspace_name(
-    Path(WorkspaceParams { workspace_name }): Path<WorkspaceParams>,
-    Extension(claim): Extension<NebulaClaim>,
-    req: Request,
-    next: Next,
-) -> Result<Response, StatusCode> {
-    if workspace_name == claim.workspace_name {
         Ok(next.run(req).await)
     } else {
         Err(StatusCode::FORBIDDEN)

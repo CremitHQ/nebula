@@ -2,11 +2,10 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use nebula_abe::{curves::bn462::Bn462Curve, schemes::isabella24::GlobalParams};
-use sea_orm::DatabaseConnection;
+use sea_orm::{DatabaseConnection, TransactionTrait as _};
 
 use nebula_domain::{
     self as domain,
-    database::WorkspaceScopedTransaction,
     parameter::{Parameter, ParameterService},
 };
 
@@ -17,25 +16,23 @@ pub(crate) trait ParameterUseCase {
 }
 
 pub(crate) struct ParameterUseCaseImpl {
-    workspace_name: String,
     database_connection: Arc<DatabaseConnection>,
     parameter_service: Arc<dyn ParameterService + Sync + Send>,
 }
 
 impl ParameterUseCaseImpl {
     pub fn new(
-        workspace_name: String,
         database_connection: Arc<DatabaseConnection>,
         parameter_service: Arc<dyn ParameterService + Sync + Send>,
     ) -> Self {
-        Self { workspace_name, database_connection, parameter_service }
+        Self { database_connection, parameter_service }
     }
 }
 
 #[async_trait]
 impl ParameterUseCase for ParameterUseCaseImpl {
     async fn create(&self) -> Result<ParameterData> {
-        let transaction = self.database_connection.begin_with_workspace_scope(&self.workspace_name).await?;
+        let transaction = self.database_connection.begin().await?;
         let parameter = self.parameter_service.create(&transaction).await.map_err(Error::GetParameterFailed)?;
         transaction.commit().await?;
 
@@ -43,7 +40,7 @@ impl ParameterUseCase for ParameterUseCaseImpl {
     }
 
     async fn get(&self) -> Result<ParameterData> {
-        let transaction = self.database_connection.begin_with_workspace_scope(&self.workspace_name).await?;
+        let transaction = self.database_connection.begin().await?;
         let parameter = self.parameter_service.get(&transaction).await.map_err(Error::GetParameterFailed)?;
         transaction.commit().await?;
 
@@ -101,7 +98,6 @@ mod test {
 
     #[tokio::test]
     async fn when_getting_parameter_data_is_successful_then_parameter_usecase_returns_parameter_ok() {
-        let workspace_name = "workspace".to_string();
         let mock_database = MockDatabase::new(DatabaseBackend::Postgres)
             .append_exec_results([MockExecResult { last_insert_id: 0, rows_affected: 1 }]);
 
@@ -114,11 +110,7 @@ mod test {
             .times(1)
             .returning(move |_| Ok(Parameter { version: 1, value: GlobalParams::<Bn462Curve>::new(&mut rng) }));
 
-        let parameter_usecase = ParameterUseCaseImpl::new(
-            workspace_name.clone(),
-            mock_connection.clone(),
-            Arc::new(mock_parameter_service),
-        );
+        let parameter_usecase = ParameterUseCaseImpl::new(mock_connection.clone(), Arc::new(mock_parameter_service));
 
         let result = parameter_usecase.get().await;
 
@@ -127,7 +119,6 @@ mod test {
 
     #[tokio::test]
     async fn when_getting_parameter_data_is_failed_then_parameter_usecase_returns_parameter_err() {
-        let workspace_name = "workspace".to_string();
         let mock_database = MockDatabase::new(DatabaseBackend::Postgres)
             .append_exec_results([MockExecResult { last_insert_id: 0, rows_affected: 1 }]);
 
@@ -139,11 +130,7 @@ mod test {
             .times(1)
             .returning(move |_| Err(nebula_domain::parameter::Error::Anyhow(anyhow::anyhow!(""))));
 
-        let parameter_usecase = ParameterUseCaseImpl::new(
-            workspace_name.clone(),
-            mock_connection.clone(),
-            Arc::new(mock_parameter_service),
-        );
+        let parameter_usecase = ParameterUseCaseImpl::new(mock_connection.clone(), Arc::new(mock_parameter_service));
 
         let result = parameter_usecase.get().await;
 

@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use nebula_token::claim::NebulaClaim;
-use sea_orm::DatabaseConnection;
+use sea_orm::{DatabaseConnection, TransactionTrait as _};
 
 use nebula_domain::{
-    database::{Persistable, WorkspaceScopedTransaction},
+    database::Persistable,
     secret::{self, AppliedPolicy, Path, SecretService},
 };
 
@@ -30,25 +30,23 @@ pub(crate) trait PathUseCase {
 }
 
 pub(crate) struct PathUseCaseImpl {
-    workspace_name: String,
     database_connection: Arc<DatabaseConnection>,
     secret_service: Arc<dyn SecretService + Sync + Send>,
 }
 
 impl PathUseCaseImpl {
     pub fn new(
-        workspace_name: String,
         database_connection: Arc<DatabaseConnection>,
         secret_service: Arc<dyn SecretService + Sync + Send>,
     ) -> Self {
-        Self { workspace_name, database_connection, secret_service }
+        Self { database_connection, secret_service }
     }
 }
 
 #[async_trait]
 impl PathUseCase for PathUseCaseImpl {
     async fn get_all(&self) -> Result<Vec<PathData>> {
-        let transaction = self.database_connection.begin_with_workspace_scope(&self.workspace_name).await?;
+        let transaction = self.database_connection.begin().await?;
         let paths = self.secret_service.get_paths(&transaction).await?;
         transaction.commit().await?;
 
@@ -56,14 +54,14 @@ impl PathUseCase for PathUseCaseImpl {
     }
 
     async fn register(&self, path: &str, policies: &[AppliedPolicy], claim: &NebulaClaim) -> Result<()> {
-        let transaction = self.database_connection.begin_with_workspace_scope(&self.workspace_name).await?;
+        let transaction = self.database_connection.begin().await?;
         self.secret_service.register_path(&transaction, path, policies, claim).await?;
         transaction.commit().await?;
         Ok(())
     }
 
     async fn delete(&self, path: &str, claim: &NebulaClaim) -> Result<()> {
-        let transaction = self.database_connection.begin_with_workspace_scope(&self.workspace_name).await?;
+        let transaction = self.database_connection.begin().await?;
         let mut path = self
             .secret_service
             .get_path(&transaction, path)
@@ -84,7 +82,7 @@ impl PathUseCase for PathUseCaseImpl {
         new_policies: Option<&[AppliedPolicy]>,
         claim: &NebulaClaim,
     ) -> Result<()> {
-        let transaction = self.database_connection.begin_with_workspace_scope(&self.workspace_name).await?;
+        let transaction = self.database_connection.begin().await?;
         let mut path = self
             .secret_service
             .get_path(&transaction, path)
@@ -105,7 +103,7 @@ impl PathUseCase for PathUseCaseImpl {
     }
 
     async fn get(&self, path: &str) -> Result<PathData> {
-        let transaction = self.database_connection.begin_with_workspace_scope(&self.workspace_name).await?;
+        let transaction = self.database_connection.begin().await?;
         let path = self
             .secret_service
             .get_path(&transaction, path)
@@ -201,8 +199,7 @@ mod test {
             .times(1)
             .returning(move |_| Ok(vec![Path::new(path.to_owned(), vec![])]));
 
-        let path_usecase =
-            PathUseCaseImpl::new("testworkspace".to_owned(), mock_connection, Arc::new(mock_secret_service));
+        let path_usecase = PathUseCaseImpl::new(mock_connection, Arc::new(mock_secret_service));
 
         let result = path_usecase.get_all().await.expect("creating workspace should be successful");
 
@@ -222,8 +219,7 @@ mod test {
             .withf(|_| true)
             .times(1)
             .returning(move |_| Err(nebula_domain::secret::Error::Anyhow(anyhow::anyhow!("some error"))));
-        let path_usecase =
-            PathUseCaseImpl::new("testworkspace".to_owned(), mock_connection, Arc::new(mock_secret_service));
+        let path_usecase = PathUseCaseImpl::new(mock_connection, Arc::new(mock_secret_service));
 
         let result = path_usecase.get_all().await;
 
@@ -233,12 +229,7 @@ mod test {
 
     #[tokio::test]
     async fn when_registering_path_is_successful_then_secret_usecase_returns_unit_ok() {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let path = "/test/path";
 
@@ -250,20 +241,14 @@ mod test {
         let mut mock_secret_service = MockSecretService::new();
         mock_secret_service.expect_register_path().times(1).returning(move |_, _, _, _| Ok(()));
 
-        let path_usecase =
-            PathUseCaseImpl::new("testworkspace".to_owned(), mock_connection, Arc::new(mock_secret_service));
+        let path_usecase = PathUseCaseImpl::new(mock_connection, Arc::new(mock_secret_service));
 
         path_usecase.register(path, &[], &claim).await.expect("registering path should be successful");
     }
 
     #[tokio::test]
     async fn when_deleting_existing_path_then_path_usecase_returns_unit_ok() {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let path = "/test/path";
         let now = Utc::now();
@@ -309,8 +294,7 @@ mod test {
             .times(1)
             .returning(move |_, _| Ok(Some(Path::new(path.to_owned(), vec![]))));
 
-        let path_usecase =
-            PathUseCaseImpl::new("testworkspace".to_owned(), mock_connection, Arc::new(mock_secret_service));
+        let path_usecase = PathUseCaseImpl::new(mock_connection, Arc::new(mock_secret_service));
 
         path_usecase.delete(path, &claim).await.expect("registering path should be successful");
     }
@@ -318,12 +302,7 @@ mod test {
     #[tokio::test]
     async fn when_deleting_existing_path_having_child_path_then_path_usecase_returns_path_is_in_use_err() {
         let now = Utc::now();
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let path = "/test/path";
 
@@ -361,8 +340,7 @@ mod test {
             .times(1)
             .returning(move |_, _| Ok(Some(Path::new(path.to_owned(), vec![]))));
 
-        let path_usecase =
-            PathUseCaseImpl::new("testworkspace".to_owned(), mock_connection, Arc::new(mock_secret_service));
+        let path_usecase = PathUseCaseImpl::new(mock_connection, Arc::new(mock_secret_service));
 
         let result = path_usecase.delete(path, &claim).await;
 
@@ -371,12 +349,7 @@ mod test {
 
     #[tokio::test]
     async fn when_deleting_existing_path_having_child_secret_then_path_usecase_returns_path_is_in_use_err() {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let path = "/test/path";
         let now = Utc::now();
@@ -415,8 +388,7 @@ mod test {
             .times(1)
             .returning(move |_, _| Ok(Some(Path::new(path.to_owned(), vec![]))));
 
-        let path_usecase =
-            PathUseCaseImpl::new("testworkspace".to_owned(), mock_connection, Arc::new(mock_secret_service));
+        let path_usecase = PathUseCaseImpl::new(mock_connection, Arc::new(mock_secret_service));
 
         let result = path_usecase.delete(path, &claim).await;
 
@@ -425,12 +397,7 @@ mod test {
 
     #[tokio::test]
     async fn when_deleting_not_existing_path_then_path_usecase_returns_path_not_exists_err() {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let path = "/test/path";
 
@@ -442,8 +409,7 @@ mod test {
         let mut mock_secret_service = MockSecretService::new();
         mock_secret_service.expect_get_path().times(1).returning(move |_, _| Ok(None));
 
-        let path_usecase =
-            PathUseCaseImpl::new("testworkspace".to_owned(), mock_connection, Arc::new(mock_secret_service));
+        let path_usecase = PathUseCaseImpl::new(mock_connection, Arc::new(mock_secret_service));
 
         let result = path_usecase.delete(path, &claim).await;
 
@@ -453,12 +419,7 @@ mod test {
     #[tokio::test]
     async fn when_updating_existing_path_then_path_usecase_returns_unit_ok() {
         let now = Utc::now();
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let path = "/test/path";
 
@@ -494,8 +455,7 @@ mod test {
             .times(1)
             .returning(move |_, _| Ok(Some(Path::new(path.to_owned(), vec![]))));
 
-        let path_usecase =
-            PathUseCaseImpl::new("testworkspace".to_owned(), mock_connection, Arc::new(mock_secret_service));
+        let path_usecase = PathUseCaseImpl::new(mock_connection, Arc::new(mock_secret_service));
 
         path_usecase
             .update(path, Some("/new/test/path"), None, &claim)
@@ -506,12 +466,7 @@ mod test {
     #[tokio::test]
     async fn when_updating_existing_path_to_existing_path_then_path_usecase_returns_path_duplicated_err() {
         let now = Utc::now();
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let path = "/test/path";
 
@@ -544,8 +499,7 @@ mod test {
             .times(1)
             .returning(move |_, _| Ok(Some(Path::new(path.to_owned(), vec![]))));
 
-        let path_usecase =
-            PathUseCaseImpl::new("testworkspace".to_owned(), mock_connection, Arc::new(mock_secret_service));
+        let path_usecase = PathUseCaseImpl::new(mock_connection, Arc::new(mock_secret_service));
 
         let result = path_usecase.update(path, Some("/new/test/path"), None, &claim).await;
 
