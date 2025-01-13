@@ -38,9 +38,8 @@ impl RunCommand for AccessConditionListCommand {
         let config = NebulaConfig::load(args.profile.as_str(), args.config.clone().map(Into::into))?;
         let token = load_token(&args.profile)?;
         let backbone_url = config.backbone.host;
-        let workspace_name = config.workspace;
 
-        let access_conditions = get_access_conditions(backbone_url.clone(), &workspace_name, &token).await?;
+        let access_conditions = get_access_conditions(backbone_url.clone(), &token).await?;
 
         let mut table = Table::new();
         table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS);
@@ -72,11 +71,10 @@ impl RunCommand for AccessConditionCreateCommand {
         let config = NebulaConfig::load(args.profile.as_str(), args.config.clone().map(Into::into))?;
         let token = load_token(&args.profile)?;
         let backbone_url = config.backbone.host;
-        let workspace_name = config.workspace;
 
         let request = PostPolicyRequest { name: self.name.clone(), expression: self.expression.clone() };
 
-        create_access_condition(backbone_url.clone(), &workspace_name, request, &token).await?;
+        create_access_condition(backbone_url.clone(), request, &token).await?;
 
         execute!(
             stdout(),

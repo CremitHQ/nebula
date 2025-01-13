@@ -13,16 +13,6 @@ pub fn validate_url(url: &str) -> Result<Validation, Error> {
     }
 }
 
-pub fn validate_workspace_name(value: &str) -> Result<Validation, Error> {
-    if value.is_empty() {
-        Ok(Validation::Invalid("Workspace name is empty".into()))
-    } else if value.len() > 50 {
-        Ok(Validation::Invalid("Workspace name is too long".into()))
-    } else {
-        Ok(Validation::Valid)
-    }
-}
-
 pub fn validate_new_profile(config: Option<String>) -> impl Fn(&str) -> Result<Validation, Error> + Clone {
     let config = config.map(Into::into);
     move |value: &str| {

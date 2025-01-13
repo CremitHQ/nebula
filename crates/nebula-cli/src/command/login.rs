@@ -46,12 +46,8 @@ impl RunCommand for LoginCommand {
                 }
             }
             AuthorizationMethod::MachineIdentity { token } => {
-                let token = get_token_from_machine_identity_token(
-                    config.authorization.host.clone(),
-                    config.workspace.as_str(),
-                    token.as_str(),
-                )
-                .await?;
+                let token =
+                    get_token_from_machine_identity_token(config.authorization.host.clone(), token.as_str()).await?;
 
                 save_token(&args.profile, &token)?;
             }

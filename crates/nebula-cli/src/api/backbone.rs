@@ -13,15 +13,10 @@ pub(crate) struct SecretResponse {
     pub access_condition_ids: Vec<Ulid>,
 }
 
-pub async fn get_secrets(
-    backbone_url: impl IntoUrl,
-    workspace_name: &str,
-    path: &str,
-    token: &str,
-) -> Result<Vec<SecretResponse>> {
+pub async fn get_secrets(backbone_url: impl IntoUrl, path: &str, token: &str) -> Result<Vec<SecretResponse>> {
     let client = reqwest::Client::new();
 
-    let mut url = backbone_url.into_url()?.join(&format!("workspaces/{workspace_name}/secrets"))?;
+    let mut url = backbone_url.into_url()?.join("secrets")?;
     url.set_query(Some(&format!("path=/{}", path.trim_matches('/'))));
     let response = client.get(url).bearer_auth(token).send().await?.json::<Vec<SecretResponse>>().await?;
 
@@ -30,16 +25,12 @@ pub async fn get_secrets(
 
 pub async fn get_secret_with_identifier(
     backbone_url: impl IntoUrl,
-    workspace_name: &str,
     identifier: &str,
     token: &str,
 ) -> Result<SecretResponse> {
     let client = reqwest::Client::new();
 
-    let url = backbone_url
-        .into_url()?
-        .join(&format!("workspaces/{workspace_name}/secrets/"))?
-        .join(identifier.trim_matches('/'))?;
+    let url = backbone_url.into_url()?.join("secrets/")?.join(identifier.trim_matches('/'))?;
     let response = client.get(url).bearer_auth(token).send().await?.json::<SecretResponse>().await?;
 
     Ok(response)
@@ -54,15 +45,10 @@ pub struct PostSecretRequest {
     pub access_condition_ids: Vec<Ulid>,
 }
 
-pub async fn create_secret(
-    backbone_url: impl IntoUrl,
-    workspace_name: &str,
-    request: PostSecretRequest,
-    token: &str,
-) -> Result<()> {
+pub async fn create_secret(backbone_url: impl IntoUrl, request: PostSecretRequest, token: &str) -> Result<()> {
     let client = reqwest::Client::new();
 
-    let url = backbone_url.into_url()?.join(&format!("workspaces/{workspace_name}/secrets"))?;
+    let url = backbone_url.into_url()?.join("secrets")?;
     let response = client.post(url).bearer_auth(token).json(&request).send().await?;
     response.error_for_status()?;
 
@@ -77,33 +63,24 @@ pub struct AccessConditionResponse {
     pub expression: String,
 }
 
-pub async fn get_access_conditions(
-    backbone_url: impl IntoUrl,
-    workspace_name: &str,
-    token: &str,
-) -> Result<Vec<AccessConditionResponse>> {
+pub async fn get_access_conditions(backbone_url: impl IntoUrl, token: &str) -> Result<Vec<AccessConditionResponse>> {
     let client = reqwest::Client::new();
 
-    let url = backbone_url.into_url()?.join(&format!("workspaces/{workspace_name}/policies"))?;
+    let url = backbone_url.into_url()?.join("policies")?;
     let response = client.get(url).bearer_auth(token).send().await?.json::<Vec<AccessConditionResponse>>().await?;
 
     Ok(response)
 }
 
-#[cached(
-    result = true,
-    key = "String",
-    convert = r#"{ format!("ac:{}/{}/{}", backbone_url.as_str() ,workspace_name, id) }"#
-)]
+#[cached(result = true, key = "String", convert = r#"{ format!("ac:{}/{}", backbone_url.as_str(), id) }"#)]
 pub async fn get_access_condition(
     backbone_url: impl IntoUrl,
-    workspace_name: &str,
     id: &Ulid,
     token: &str,
 ) -> Result<AccessConditionResponse> {
     let client = reqwest::Client::new();
 
-    let url = backbone_url.into_url()?.join(&format!("workspaces/{workspace_name}/policies/{id}"))?;
+    let url = backbone_url.into_url()?.join(&format!("policies/{id}"))?;
     let response = client.get(url).bearer_auth(token).send().await?.json::<AccessConditionResponse>().await?;
 
     Ok(response)
@@ -118,13 +95,12 @@ pub struct PostPolicyRequest {
 
 pub async fn create_access_condition(
     backbone_url: impl IntoUrl,
-    workspace_name: &str,
     request: PostPolicyRequest,
     token: &str,
 ) -> Result<()> {
     let client = reqwest::Client::new();
 
-    let url = backbone_url.into_url()?.join(&format!("workspaces/{workspace_name}/policies"))?;
+    let url = backbone_url.into_url()?.join("policies")?;
     let response = client.post(url).bearer_auth(token).json(&request).send().await?;
     response.error_for_status()?;
 
@@ -154,24 +130,19 @@ pub enum AllowedAction {
     Manage,
 }
 
-pub async fn get_paths(backbone_url: impl IntoUrl, workspace_name: &str, token: &str) -> Result<Vec<PathResponse>> {
+pub async fn get_paths(backbone_url: impl IntoUrl, token: &str) -> Result<Vec<PathResponse>> {
     let client = reqwest::Client::new();
 
-    let url = backbone_url.into_url()?.join(&format!("workspaces/{workspace_name}/paths"))?;
+    let url = backbone_url.into_url()?.join("paths")?;
     let response = client.get(url).bearer_auth(token).send().await?.json::<Vec<PathResponse>>().await?;
 
     Ok(response)
 }
 
-pub async fn get_path(
-    backbone_url: impl IntoUrl,
-    workspace_name: &str,
-    path: &str,
-    token: &str,
-) -> Result<PathResponse> {
+pub async fn get_path(backbone_url: impl IntoUrl, path: &str, token: &str) -> Result<PathResponse> {
     let client = reqwest::Client::new();
 
-    let url = backbone_url.into_url()?.join(&format!("workspaces/{workspace_name}/paths/{path}"))?;
+    let url = backbone_url.into_url()?.join(&format!("paths/{path}"))?;
     let response = client.get(url).bearer_auth(token).send().await?.json::<PathResponse>().await?;
 
     Ok(response)
@@ -184,15 +155,10 @@ pub struct CreatePathRequest {
     pub applied_policies: Vec<AppliedPolicy>,
 }
 
-pub async fn create_path(
-    backbone_url: impl IntoUrl,
-    workspace_name: &str,
-    request: CreatePathRequest,
-    token: &str,
-) -> Result<()> {
+pub async fn create_path(backbone_url: impl IntoUrl, request: CreatePathRequest, token: &str) -> Result<()> {
     let client = reqwest::Client::new();
 
-    let url = backbone_url.into_url()?.join(&format!("workspaces/{workspace_name}/paths"))?;
+    let url = backbone_url.into_url()?.join("paths")?;
     let response = client.post(url).bearer_auth(token).json(&request).send().await?;
     response.error_for_status()?;
 
@@ -211,16 +177,12 @@ pub struct ParameterResponse {
     disk = true,
     time = 600,
     key = "String",
-    convert = r#"{ format!("gp:{}/{}", backbone_url.as_str(), workspace_name) }"#
+    convert = r#"{ format!("gp:{}", backbone_url.as_str()) }"#
 )]
-pub async fn get_global_params(
-    backbone_url: impl IntoUrl,
-    workspace_name: &str,
-    token: &str,
-) -> Result<ParameterResponse> {
+pub async fn get_global_params(backbone_url: impl IntoUrl, token: &str) -> Result<ParameterResponse> {
     let client = reqwest::Client::new();
 
-    let url = backbone_url.into_url()?.join(&format!("workspaces/{workspace_name}/parameter"))?;
+    let url = backbone_url.into_url()?.join("parameter")?;
     let response = client.get(url).bearer_auth(token).send().await?.json::<ParameterResponse>().await?;
 
     Ok(response)
@@ -235,14 +197,10 @@ pub struct AuthorityResponse {
     pub public_key: Option<String>,
 }
 
-pub async fn get_authorities(
-    backbone_url: impl IntoUrl,
-    workspace_name: &str,
-    token: &str,
-) -> Result<Vec<AuthorityResponse>> {
+pub async fn get_authorities(backbone_url: impl IntoUrl, token: &str) -> Result<Vec<AuthorityResponse>> {
     let client = reqwest::Client::new();
 
-    let url = backbone_url.into_url()?.join(&format!("workspaces/{workspace_name}/authorities"))?;
+    let url = backbone_url.into_url()?.join("authorities")?;
     let response = client.get(url).bearer_auth(token).send().await?.json::<Vec<AuthorityResponse>>().await?;
 
     Ok(response)
@@ -255,15 +213,10 @@ pub struct PostAuthorityRequest {
     pub host: String,
 }
 
-pub async fn add_authority(
-    backbone_url: impl IntoUrl,
-    workspace_name: &str,
-    request: PostAuthorityRequest,
-    token: &str,
-) -> Result<()> {
+pub async fn add_authority(backbone_url: impl IntoUrl, request: PostAuthorityRequest, token: &str) -> Result<()> {
     let client = reqwest::Client::new();
 
-    let url = backbone_url.into_url()?.join(&format!("workspaces/{workspace_name}/authorities"))?;
+    let url = backbone_url.into_url()?.join("authorities")?;
     let response = client.post(url).bearer_auth(token).json(&request).send().await?;
     response.error_for_status()?;
 

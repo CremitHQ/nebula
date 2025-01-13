@@ -46,9 +46,8 @@ impl RunCommand for AuthorityListCommand {
         let config = NebulaConfig::load(args.profile.as_str(), args.config.clone().map(Into::into))?;
         let token = load_token(&args.profile)?;
         let backbone_url = config.backbone.host;
-        let workspace_name = config.workspace;
 
-        let authorities = get_authorities(backbone_url.clone(), &workspace_name, &token).await?;
+        let authorities = get_authorities(backbone_url.clone(), &token).await?;
 
         let mut table = Table::new();
         table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS);
@@ -83,9 +82,8 @@ impl RunCommand for AuthorityInitCommand {
         let config = NebulaConfig::load(args.profile.as_str(), args.config.clone().map(Into::into))?;
         let token = load_token(&args.profile)?;
         let backbone_url = config.backbone.host;
-        let workspace_name = config.workspace;
 
-        let authorities = get_authorities(backbone_url.clone(), &workspace_name, &token).await?;
+        let authorities = get_authorities(backbone_url.clone(), &token).await?;
 
         let authority = authorities
             .into_iter()
@@ -183,7 +181,6 @@ impl RunCommand for AuthorityAddCommand {
         let config = NebulaConfig::load(args.profile.as_str(), args.config.clone().map(Into::into))?;
         let token = load_token(&args.profile)?;
         let backbone_url = config.backbone.host;
-        let workspace_name = config.workspace;
 
         let name = if let Some(name) = &self.name { name.clone() } else { Text::new("Authority name:").prompt()? };
 
@@ -197,7 +194,7 @@ impl RunCommand for AuthorityAddCommand {
             Text::new("Authority host:").with_validator(validate_url).prompt()?
         };
 
-        add_authority(backbone_url, &workspace_name, PostAuthorityRequest { name, host }, &token).await?;
+        add_authority(backbone_url, PostAuthorityRequest { name, host }, &token).await?;
 
         execute!(stdout(), SetForegroundColor(Color::Green), Print("✅ Successfully added authority\n"), ResetColor)?;
 
@@ -217,9 +214,8 @@ impl RunCommand for AuthorityDisarmCommand {
         let config = NebulaConfig::load(args.profile.as_str(), args.config.clone().map(Into::into))?;
         let token = load_token(&args.profile)?;
         let backbone_url = config.backbone.host;
-        let workspace_name = config.workspace;
 
-        let authorities = get_authorities(backbone_url.clone(), &workspace_name, &token).await?;
+        let authorities = get_authorities(backbone_url.clone(), &token).await?;
 
         let authority = authorities
             .into_iter()
