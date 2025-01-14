@@ -23,12 +23,3 @@ admin_role.type = "ALL"
 # admin_role.type = "GROUP"
 # admin_role.attribute_name = "group"
 # admin_role.admin_groups = ["ADMINSTRATOR"]
-
-[workspace]
-type = "STATIC"
-name = "default" # Change this to the name of your workspace
-
-# or "CLAIM" if you want to specify the workspace by the claim value
-# [workspace]
-# type = "CLAIM"
-# claim = "workspace" # Change this to the claim key of your workspace
