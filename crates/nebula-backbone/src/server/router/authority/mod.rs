@@ -17,7 +17,7 @@ use crate::{
         authority::{AuthorityData, AuthorityUseCase},
         Application,
     },
-    server::{check_admin_role, check_member_role, check_workspace_name, response::handle_internal_server_error},
+    server::{check_admin_role, check_member_role, response::handle_internal_server_error},
 };
 
 use self::{
@@ -30,18 +30,13 @@ mod response;
 
 pub(crate) fn router(application: Arc<Application>) -> axum::Router {
     let member_router = Router::new()
-        .route("/workspaces/:workspace_name/authorities", get(handle_get_authorities))
-        .route("/workspaces/:workspace_name/authorities/:authority_id", get(handle_get_authority))
-        .route_layer(middleware::from_fn(check_member_role))
-        .route_layer(middleware::from_fn(check_workspace_name));
+        .route("/authorities", get(handle_get_authorities))
+        .route("/authorities/:authority_id", get(handle_get_authority))
+        .route_layer(middleware::from_fn(check_member_role));
     let admin_router = Router::new()
-        .route("/workspaces/:workspace_name/authorities", post(handle_post_authority))
-        .route(
-            "/workspaces/:workspace_name/authorities/:authority_id",
-            patch(handle_patch_authority).delete(handle_delete_authority),
-        )
-        .route_layer(middleware::from_fn(check_admin_role))
-        .route_layer(middleware::from_fn(check_workspace_name));
+        .route("/authorities", post(handle_post_authority))
+        .route("/authorities/:authority_id", patch(handle_patch_authority).delete(handle_delete_authority))
+        .route_layer(middleware::from_fn(check_admin_role));
 
     Router::new().merge(member_router).merge(admin_router).with_state(application)
 }
@@ -68,21 +63,18 @@ impl From<AuthorityData> for response::AuthorityResponse {
 
 #[debug_handler]
 async fn handle_post_authority(
-    Path(workspace_name): Path<String>,
     State(application): State<Arc<Application>>,
     Json(payload): Json<PostAuthorityRequest>,
 ) -> application::authority::Result<impl IntoResponse> {
-    application.with_workspace(&workspace_name).authority().register_authority(&payload.name, &payload.host).await?;
+    application.authority().register_authority(&payload.name, &payload.host).await?;
     Ok(StatusCode::CREATED)
 }
 
 #[debug_handler]
 async fn handle_get_authorities(
-    Path(workspace_name): Path<String>,
     State(application): State<Arc<Application>>,
 ) -> application::authority::Result<impl IntoResponse> {
-    let authorities = application.with_workspace(&workspace_name).authority().get_authorities().await?;
-
+    let authorities = application.authority().get_authorities().await?;
     let payload: Vec<_> = authorities.into_iter().map(response::AuthorityResponse::from).collect();
 
     Ok(Json(payload))
@@ -90,10 +82,10 @@ async fn handle_get_authorities(
 
 #[debug_handler]
 async fn handle_get_authority(
-    Path((workspace_name, authority_id)): Path<(String, Ulid)>,
+    Path(authority_id): Path<Ulid>,
     State(application): State<Arc<Application>>,
 ) -> application::authority::Result<impl IntoResponse> {
-    let authority = application.with_workspace(&workspace_name).authority().get_authority(&authority_id).await?;
+    let authority = application.authority().get_authority(&authority_id).await?;
 
     let payload = AuthorityResponse::from(authority);
 
@@ -102,12 +94,11 @@ async fn handle_get_authority(
 
 #[debug_handler]
 async fn handle_patch_authority(
-    Path((workspace_name, authority_id)): Path<(String, Ulid)>,
+    Path(authority_id): Path<Ulid>,
     State(application): State<Arc<Application>>,
     Json(payload): Json<PatchAuthorityRequest>,
 ) -> application::authority::Result<impl IntoResponse> {
     application
-        .with_workspace(&workspace_name)
         .authority()
         .update_authority(&authority_id, payload.name.as_deref(), payload.public_key.as_deref())
         .await?;
@@ -117,10 +108,10 @@ async fn handle_patch_authority(
 
 #[debug_handler]
 async fn handle_delete_authority(
-    Path((workspace_name, authority_id)): Path<(String, Ulid)>,
+    Path(authority_id): Path<Ulid>,
     State(application): State<Arc<Application>>,
 ) -> application::authority::Result<impl IntoResponse> {
-    application.with_workspace(&workspace_name).authority().delete_authority(&authority_id).await?;
+    application.authority().delete_authority(&authority_id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

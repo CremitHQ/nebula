@@ -1155,12 +1155,7 @@ mod test {
 
     #[tokio::test]
     async fn when_getting_secret_data_is_successful_then_secret_service_returns_secrets_ok() {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let now = Utc::now();
         let metadata_id = UlidId::new(Ulid::from_str("01JACYVTYB4F2PEBFRG1BB7BKP").unwrap());
@@ -1216,12 +1211,7 @@ mod test {
 
     #[tokio::test]
     async fn when_getting_secrets_is_failed_then_secret_service_returns_anyhow_err() {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let mock_database = MockDatabase::new(DatabaseBackend::Postgres)
             .append_query_errors(vec![DbErr::Custom("some error".to_owned())]);
@@ -1240,12 +1230,7 @@ mod test {
 
     #[tokio::test]
     async fn when_getting_secret_data_is_successful_then_secret_service_returns_secret_ok() {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let now = Utc::now();
         let identifier = "/test/path/TEST_KEY";
@@ -1302,12 +1287,7 @@ mod test {
 
     #[tokio::test]
     async fn when_getting_secret_is_failed_then_secret_service_returns_anyhow_err() {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let identifier = "/some/secret";
         let mock_database = MockDatabase::new(DatabaseBackend::Postgres)
@@ -1327,12 +1307,7 @@ mod test {
 
     #[tokio::test]
     async fn when_getting_secret_path_without_slash_then_secret_service_returns_invalid_secret_identifier_error() {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let identifier = "just_key";
         let mock_database = MockDatabase::new(DatabaseBackend::Postgres)
@@ -1352,12 +1327,7 @@ mod test {
     #[tokio::test]
     async fn when_getting_secret_path_without_leading_slash_then_secret_service_returns_invalid_secret_identifier_error(
     ) {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let identifier = "some/secret";
         let mock_database = MockDatabase::new(DatabaseBackend::Postgres)
@@ -1377,12 +1347,7 @@ mod test {
     #[tokio::test]
     async fn when_getting_secret_path_contains_empty_segment_then_secret_service_returns_invalid_secret_identifier_error(
     ) {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let identifier = "/some//secret";
         let mock_database = MockDatabase::new(DatabaseBackend::Postgres)
@@ -1401,12 +1366,7 @@ mod test {
 
     #[tokio::test]
     async fn when_getting_not_existing_secret_then_secret_service_returns_secret_not_exists_error() {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let identifier = "/some/secret";
         let mock_database =
@@ -1469,12 +1429,7 @@ mod test {
 
     #[tokio::test]
     async fn when_registering_secret_is_successful_then_secret_service_returns_unit_ok() {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let now = Utc::now();
         let path = "/test/path";
@@ -1548,12 +1503,7 @@ mod test {
     #[tokio::test]
     async fn when_registering_secret_with_not_existing_path_then_secret_service_returns_path_not_exists_err() {
         let now = Utc::now();
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let path = "/test/path";
         let key = "TEST_KEY";
@@ -1601,12 +1551,7 @@ mod test {
     #[tokio::test]
     async fn when_registering_secret_with_already_used_key_then_secret_service_returns_identifier_conflicted_err() {
         let now = Utc::now();
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let path = "/test/path";
         let key = "TEST_KEY";
@@ -1659,12 +1604,7 @@ mod test {
     #[tokio::test]
     async fn when_delete_secret_entry_then_delete_property_turns_into_true() {
         let now = Utc::now();
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let mock_database = MockDatabase::new(DatabaseBackend::Postgres)
             .append_query_results([[path::Model {
@@ -1713,12 +1653,7 @@ mod test {
     #[tokio::test]
     async fn when_update_path_of_secret_entry_then_write_new_path_to_field() {
         let now = Utc::now();
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let mock_database = MockDatabase::new(DatabaseBackend::Postgres)
             .append_query_results([[path::Model {
@@ -1770,12 +1705,7 @@ mod test {
     #[tokio::test]
     async fn when_update_cipher_of_secret_entry_then_write_new_cipher_to_field() {
         let now = Utc::now();
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let mock_database = MockDatabase::new(DatabaseBackend::Postgres)
             .append_query_results([[path::Model {
@@ -1827,12 +1757,7 @@ mod test {
     #[tokio::test]
     async fn when_update_access_policies_of_secret_entry_then_write_new_access_policy_ids_to_field() {
         let now = Utc::now();
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let mut secret_entry = SecretEntry {
             key: "TEST_KEY".to_owned(),
@@ -1897,12 +1822,7 @@ mod test {
         let now = Utc::now();
         let path = "/test/path";
 
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let mock_database = MockDatabase::new(DatabaseBackend::Postgres)
             .append_query_results([[path::Model {
@@ -1946,12 +1866,7 @@ mod test {
     async fn when_path_is_invalid_then_secret_service_returns_invalid_path_err() {
         let invalid_paths = ["//", "", "/a//b", "a/b/c", "/a/b/c/"];
 
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let secret_service = PostgresSecretService {};
         let mock_database = MockDatabase::new(DatabaseBackend::Postgres);
@@ -1969,12 +1884,7 @@ mod test {
 
     #[tokio::test]
     async fn when_parent_path_is_not_exists_then_secret_service_returns_parent_path_not_exists_err() {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let path = "/test/path";
 
@@ -1996,12 +1906,7 @@ mod test {
     #[tokio::test]
     async fn when_path_is_already_registered_then_secret_service_returns_path_duplicated_err() {
         let now = Utc::now();
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let path = "/test/path";
 
@@ -2094,12 +1999,7 @@ mod test {
 
         let transaction = mock_connection.begin().await.expect("begining transaction should be successful");
 
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let mut path = Path::new("/test/path".to_owned(), vec![]);
 
@@ -2134,12 +2034,7 @@ mod test {
 
         let transaction = mock_connection.begin().await.expect("begining transaction should be successful");
 
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let mut path = Path::new("/test/path".to_owned(), vec![]);
 
@@ -2157,12 +2052,7 @@ mod test {
         let now = Utc::now();
         let invalid_paths = ["//", "", "/a//b", "a/b/c", "/a/b/c/"];
 
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         for invalid_path in invalid_paths {
             let mock_database = MockDatabase::new(DatabaseBackend::Postgres)

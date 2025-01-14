@@ -58,10 +58,9 @@ impl RunCommand for SecretListCommand {
         let config = NebulaConfig::load(args.profile.as_str(), args.config.clone().map(Into::into))?;
         let token = load_token(&args.profile)?;
         let backbone_url = config.backbone.host;
-        let workspace_name = config.workspace;
 
-        let paths = get_paths(backbone_url.clone(), &workspace_name, &token).await?;
-        let secrets = get_secrets(backbone_url.clone(), &workspace_name, &self.path, &token).await?;
+        let paths = get_paths(backbone_url.clone(), &token).await?;
+        let secrets = get_secrets(backbone_url.clone(), &self.path, &token).await?;
 
         let mut table = Table::new();
         table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS);
@@ -87,10 +86,7 @@ impl RunCommand for SecretListCommand {
 
         for secret in secrets {
             let access_condition = join_all(
-                secret
-                    .access_condition_ids
-                    .iter()
-                    .map(|ac| get_access_condition(backbone_url.clone(), &workspace_name, ac, &token)),
+                secret.access_condition_ids.iter().map(|ac| get_access_condition(backbone_url.clone(), ac, &token)),
             )
             .await
             .into_iter()
@@ -121,21 +117,21 @@ impl RunCommand for SecretGetCommand {
         let config = NebulaConfig::load(args.profile.as_str(), args.config.clone().map(Into::into))?;
         let token = load_token(&args.profile)?;
         let backbone_url = config.backbone.host;
-        let workspace_name = config.workspace;
+
         let identifier = &self.path;
 
-        let gp = get_global_params(backbone_url.clone(), &workspace_name, &token).await?;
+        let gp = get_global_params(backbone_url.clone(), &token).await?;
         let gp = STANDARD.decode(gp.parameter)?;
         let gp: GlobalParams<Bn462Curve> = rmp_serde::from_slice(&gp)?;
 
-        let authorities = get_authorities(backbone_url.clone(), &workspace_name, &token).await?;
-        let secret = get_secret_with_identifier(backbone_url, &workspace_name, identifier, &token).await?;
+        let authorities = get_authorities(backbone_url.clone(), &token).await?;
+        let secret = get_secret_with_identifier(backbone_url, identifier, &token).await?;
         let ct = STANDARD.decode(secret.cipher)?;
         let ct: Ciphertext<Bn462Curve> = rmp_serde::from_slice(&ct)?;
 
         let mut usks = vec![];
         for authority in authorities {
-            let usk = get_user_key(&authority.host, &workspace_name, &token).await?;
+            let usk = get_user_key(&authority.host, &token).await?;
 
             let usk = STANDARD.decode(&usk.user_key)?;
             let usk: UserSecretKey<Bn462Curve> = rmp_serde::from_slice(&usk)?;
@@ -176,20 +172,19 @@ impl RunCommand for SecretCreateCommand {
         let config = NebulaConfig::load(args.profile.as_str(), args.config.clone().map(Into::into))?;
         let token = load_token(&args.profile)?;
         let backbone_url = config.backbone.host;
-        let workspace_name = config.workspace;
 
-        let gp = get_global_params(backbone_url.clone(), &workspace_name, &token).await?;
+        let gp = get_global_params(backbone_url.clone(), &token).await?;
         let gp = STANDARD.decode(gp.parameter)?;
         let gp: GlobalParams<Bn462Curve> = rmp_serde::from_slice(&gp)?;
 
-        let authorities = get_authorities(backbone_url.clone(), &workspace_name, &token).await?;
+        let authorities = get_authorities(backbone_url.clone(), &token).await?;
         let mut pks = HashMap::new();
         for authority in authorities {
-            let pk_response = get_public_key(&authority.host, &workspace_name).await?;
+            let pk_response = get_public_key(&authority.host).await?;
 
             let pk = STANDARD.decode(&pk_response.public_key)?;
             let pk: AuthorityPublicKey<Bn462Curve> = rmp_serde::from_slice(&pk)?;
-            pks.insert(format!("{}-{}#{}", authority.name, workspace_name, pk_response.version), pk);
+            pks.insert(format!("{}#{}", authority.name, pk_response.version), pk);
         }
 
         let mut rng = MiraclRng::new();
@@ -199,8 +194,7 @@ impl RunCommand for SecretCreateCommand {
 
         let mut policy = vec![];
         for id in &self.access_condition_ids {
-            let access_condition =
-                get_access_condition(backbone_url.clone(), &workspace_name, &Ulid::from_str(id)?, &token).await?;
+            let access_condition = get_access_condition(backbone_url.clone(), &Ulid::from_str(id)?, &token).await?;
             policy.push(access_condition.expression);
         }
         let policy = (policy.join(" OR "), PolicyLanguage::HumanPolicy);
@@ -221,7 +215,7 @@ impl RunCommand for SecretCreateCommand {
             self.access_condition_ids.iter().map(|id| Ulid::from_str(id)).collect::<Result<Vec<_>, _>>()?;
 
         let request = PostSecretRequest { path, key, cipher: ct, access_condition_ids };
-        create_secret(backbone_url.clone(), &workspace_name, request, &token).await?;
+        create_secret(backbone_url.clone(), request, &token).await?;
 
         execute!(stdout(), SetForegroundColor(Color::Green), Print("✅ Successfully created secret\n"), ResetColor)?;
 

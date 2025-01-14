@@ -29,7 +29,7 @@ pub enum FileStorageError {
     NotAllowedDotDot,
 }
 
-impl<'a> Storage for FileStorage<'a> {
+impl Storage for FileStorage<'_> {
     type Key = str;
     type Value = [u8];
 

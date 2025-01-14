@@ -14,12 +14,12 @@ pub struct GetPublicKeyResponse {
     disk = true,
     time = 60,
     key = "String",
-    convert = r#"{ format!("pk:{}/{}", authority_url.as_str(), workspace_name) }"#
+    convert = r#"{ format!("pk:{}", authority_url.as_str()) }"#
 )]
-pub async fn get_public_key(authority_url: impl IntoUrl, workspace_name: &str) -> anyhow::Result<GetPublicKeyResponse> {
+pub async fn get_public_key(authority_url: impl IntoUrl) -> anyhow::Result<GetPublicKeyResponse> {
     let client = reqwest::Client::new();
 
-    let url = authority_url.into_url()?.join(&format!("workspaces/{workspace_name}/public-key"))?;
+    let url = authority_url.into_url()?.join("public-key")?;
     let response = client.get(url).send().await?.json::<GetPublicKeyResponse>().await?;
 
     Ok(response)
@@ -32,14 +32,10 @@ pub struct GetUserKeyResponse {
     pub version: u64,
 }
 
-pub async fn get_user_key(
-    authority_url: impl IntoUrl,
-    workspace_name: &str,
-    token: &str,
-) -> anyhow::Result<GetUserKeyResponse> {
+pub async fn get_user_key(authority_url: impl IntoUrl, token: &str) -> anyhow::Result<GetUserKeyResponse> {
     let client = reqwest::Client::new();
 
-    let url = authority_url.into_url()?.join(&format!("workspaces/{workspace_name}/user-key"))?;
+    let url = authority_url.into_url()?.join("user-key")?;
     let response = client.get(url).bearer_auth(token).send().await?.json::<GetUserKeyResponse>().await?;
 
     Ok(response)

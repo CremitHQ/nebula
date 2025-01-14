@@ -1,6 +1,6 @@
 use config::{Config, File, FileFormat};
 use nebula_config_path::config_dir;
-use nebula_domain::connector::saml::{AttributesConfig, SAMLAdminRoleConfig, WorkspaceConfig};
+use nebula_domain::connector::saml::{AttributesConfig, SAMLAdminRoleConfig};
 use nebula_token::jwk::jwk_set::JwkSet;
 use serde::Deserialize;
 use url::Url;
@@ -14,7 +14,6 @@ pub(crate) struct ApplicationConfig {
     pub database: DatabaseConfig,
     pub upstream_idp: UpstreamIdpConfig,
     pub token: TokenConfig,
-    pub workspace: WorkspaceConfig,
     pub path_prefix: Option<String>,
     pub cors: Option<CorsConfig>,
 }

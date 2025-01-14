@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
+    extract::State,
     middleware,
     response::IntoResponse,
     routing::{get, post},
@@ -15,7 +15,7 @@ use crate::{
         parameter::{ParameterData, ParameterUseCase},
         Application,
     },
-    server::{check_admin_role, check_workspace_name},
+    server::check_admin_role,
 };
 
 use self::response::ParameterResponse;
@@ -23,32 +23,29 @@ use self::response::ParameterResponse;
 mod response;
 
 pub(crate) fn public_router(application: Arc<Application>) -> axum::Router {
-    Router::new().route("/workspaces/:workspace_name/parameter", get(handle_get_parameter)).with_state(application)
+    Router::new().route("/parameter", get(handle_get_parameter)).with_state(application)
 }
 
 pub(crate) fn router(application: Arc<Application>) -> axum::Router {
     let admin_router = Router::new()
-        .route("/workspaces/:workspace_name/parameter", post(handle_post_parameter))
-        .route_layer(middleware::from_fn(check_admin_role))
-        .route_layer(middleware::from_fn(check_workspace_name));
+        .route("/parameter", post(handle_post_parameter))
+        .route_layer(middleware::from_fn(check_admin_role));
     Router::new().merge(admin_router).with_state(application)
 }
 
 async fn handle_post_parameter(
-    Path(workspace_name): Path<String>,
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, application::parameter::Error> {
-    let parameter = application.with_workspace(&workspace_name).parameter().create().await?;
+    let parameter = application.parameter().create().await?;
     let response: ParameterResponse = parameter.try_into()?;
 
     Ok(Json(response))
 }
 
 async fn handle_get_parameter(
-    Path(workspace_name): Path<String>,
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, application::parameter::Error> {
-    let parameter = application.with_workspace(&workspace_name).parameter().get().await?;
+    let parameter = application.parameter().get().await?;
     let response: ParameterResponse = parameter.try_into()?;
 
     Ok(Json(response))

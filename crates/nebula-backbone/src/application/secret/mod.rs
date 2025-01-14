@@ -2,12 +2,12 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use nebula_token::claim::NebulaClaim;
-use sea_orm::{DatabaseConnection, DatabaseTransaction};
+use sea_orm::{DatabaseConnection, DatabaseTransaction, TransactionTrait as _};
 use ulid::Ulid;
 
 use nebula_domain::{
     self as domain,
-    database::{Persistable, WorkspaceScopedTransaction},
+    database::Persistable,
     policy::{AccessCondition, PolicyService},
     secret::{SecretEntry, SecretService},
 };
@@ -22,7 +22,6 @@ pub(crate) trait SecretUseCase {
 }
 
 pub(crate) struct SecretUseCaseImpl {
-    workspace_name: String,
     database_connection: Arc<DatabaseConnection>,
     secret_service: Arc<dyn SecretService + Sync + Send>,
     policy_service: Arc<dyn PolicyService + Sync + Send>,
@@ -30,12 +29,11 @@ pub(crate) struct SecretUseCaseImpl {
 
 impl SecretUseCaseImpl {
     pub fn new(
-        workspace_name: String,
         database_connection: Arc<DatabaseConnection>,
         secret_service: Arc<dyn SecretService + Sync + Send>,
         policy_service: Arc<dyn PolicyService + Sync + Send>,
     ) -> Self {
-        Self { workspace_name, database_connection, secret_service, policy_service }
+        Self { database_connection, secret_service, policy_service }
     }
 
     async fn get_policies(&self, transaction: &DatabaseTransaction, ids: Vec<Ulid>) -> Result<Vec<AccessCondition>> {
@@ -57,7 +55,7 @@ impl SecretUseCaseImpl {
 #[async_trait]
 impl SecretUseCase for SecretUseCaseImpl {
     async fn list(&self, path: &str, claim: &NebulaClaim) -> Result<Vec<SecretData>> {
-        let transaction = self.database_connection.begin_with_workspace_scope(&self.workspace_name).await?;
+        let transaction = self.database_connection.begin().await?;
         let secrets = self.secret_service.list_secret(&transaction, path, claim).await?;
         transaction.commit().await?;
 
@@ -65,7 +63,7 @@ impl SecretUseCase for SecretUseCaseImpl {
     }
 
     async fn get(&self, secret_identifier: &str, claim: &NebulaClaim) -> Result<SecretData> {
-        let transaction = self.database_connection.begin_with_workspace_scope(&self.workspace_name).await?;
+        let transaction = self.database_connection.begin().await?;
         let secret = self.secret_service.get_secret(&transaction, secret_identifier, claim).await?;
         transaction.commit().await?;
 
@@ -73,7 +71,7 @@ impl SecretUseCase for SecretUseCaseImpl {
     }
 
     async fn register(&self, cmd: SecretRegisterCommand, claim: &NebulaClaim) -> Result<()> {
-        let transaction = self.database_connection.begin_with_workspace_scope(&self.workspace_name).await?;
+        let transaction = self.database_connection.begin().await?;
 
         let access_conditions = self.get_policies(&transaction, cmd.access_condition_ids).await?;
 
@@ -87,7 +85,7 @@ impl SecretUseCase for SecretUseCaseImpl {
     }
 
     async fn delete(&self, secret_identifier: &str, claim: &NebulaClaim) -> Result<()> {
-        let transaction = self.database_connection.begin_with_workspace_scope(&self.workspace_name).await?;
+        let transaction = self.database_connection.begin().await?;
         let mut secret = self.secret_service.get_secret(&transaction, secret_identifier, claim).await?;
         secret.delete(&transaction, claim).await?;
         secret.persist(&transaction).await?;
@@ -97,7 +95,7 @@ impl SecretUseCase for SecretUseCaseImpl {
     }
 
     async fn update(&self, secret_identifier: &str, update: SecretUpdate, claim: &NebulaClaim) -> Result<()> {
-        let transaction = self.database_connection.begin_with_workspace_scope(&self.workspace_name).await?;
+        let transaction = self.database_connection.begin().await?;
 
         let mut secret = self.secret_service.get_secret(&transaction, secret_identifier, claim).await?;
 
@@ -226,12 +224,7 @@ mod test {
 
     #[tokio::test]
     async fn when_getting_secret_data_is_successful_then_secret_usecase_returns_secrets_ok() {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let key = "TEST_KEY";
         let path = "/test/path";
@@ -256,12 +249,8 @@ mod test {
         });
         let mock_policy_service = MockPolicyService::new();
 
-        let secret_usecase = SecretUseCaseImpl::new(
-            "testworkspace".to_owned(),
-            mock_connection,
-            Arc::new(mock_secret_service),
-            Arc::new(mock_policy_service),
-        );
+        let secret_usecase =
+            SecretUseCaseImpl::new(mock_connection, Arc::new(mock_secret_service), Arc::new(mock_policy_service));
 
         let result = secret_usecase.list("/", &claim).await.expect("creating workspace should be successful");
 
@@ -273,12 +262,7 @@ mod test {
 
     #[tokio::test]
     async fn when_getting_secret_is_failed_then_secret_usecase_returns_anyhow_err() {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let mock_database = MockDatabase::new(DatabaseBackend::Postgres)
             .append_exec_results([MockExecResult { last_insert_id: 0, rows_affected: 1 }]);
@@ -293,12 +277,8 @@ mod test {
             .returning(move |_, _, _| Err(nebula_domain::secret::Error::Anyhow(anyhow::anyhow!("some error"))));
         let mock_policy_service = MockPolicyService::new();
 
-        let secret_usecase = SecretUseCaseImpl::new(
-            "testworkspace".to_owned(),
-            mock_connection,
-            Arc::new(mock_secret_service),
-            Arc::new(mock_policy_service),
-        );
+        let secret_usecase =
+            SecretUseCaseImpl::new(mock_connection, Arc::new(mock_secret_service), Arc::new(mock_policy_service));
 
         let result = secret_usecase.list("/", &claim).await;
 
@@ -308,12 +288,7 @@ mod test {
 
     #[tokio::test]
     async fn when_getting_single_secret_data_is_successful_then_secret_usecase_returns_secret_ok() {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let identifier = "/test/path/TEST_KEY";
         let key = "TEST_KEY";
@@ -341,12 +316,8 @@ mod test {
         );
         let mock_policy_service = MockPolicyService::new();
 
-        let secret_usecase = SecretUseCaseImpl::new(
-            "testworkspace".to_owned(),
-            mock_connection,
-            Arc::new(mock_secret_service),
-            Arc::new(mock_policy_service),
-        );
+        let secret_usecase =
+            SecretUseCaseImpl::new(mock_connection, Arc::new(mock_secret_service), Arc::new(mock_policy_service));
 
         let result = secret_usecase.get(identifier, &claim).await.expect("creating workspace should be successful");
 
@@ -358,12 +329,7 @@ mod test {
 
     #[tokio::test]
     async fn when_registering_secret_is_successful_then_secret_usecase_returns_unit_ok() {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let key = "TEST_KEY";
         let path = "/test/path";
@@ -385,12 +351,8 @@ mod test {
             )))
         });
 
-        let secret_usecase = SecretUseCaseImpl::new(
-            "testworkspace".to_owned(),
-            mock_connection,
-            Arc::new(mock_secret_service),
-            Arc::new(mock_policy_service),
-        );
+        let secret_usecase =
+            SecretUseCaseImpl::new(mock_connection, Arc::new(mock_secret_service), Arc::new(mock_policy_service));
 
         secret_usecase
             .register(
@@ -408,12 +370,7 @@ mod test {
 
     #[tokio::test]
     async fn when_registering_secret_with_not_existing_policy_then_secret_usecase_returns_policy_not_exists_err() {
-        let claim = NebulaClaim {
-            gid: "test@cremit.io".to_owned(),
-            workspace_name: "cremit".to_owned(),
-            attributes: HashMap::new(),
-            role: Role::Member,
-        };
+        let claim = NebulaClaim { gid: "test@cremit.io".to_owned(), attributes: HashMap::new(), role: Role::Member };
 
         let key = "TEST_KEY";
         let path = "/test/path";
@@ -428,12 +385,8 @@ mod test {
         let mut mock_policy_service = MockPolicyService::new();
         mock_policy_service.expect_get().times(1).returning(move |_, _| Ok(None));
 
-        let secret_usecase = SecretUseCaseImpl::new(
-            "testworkspace".to_owned(),
-            mock_connection,
-            Arc::new(mock_secret_service),
-            Arc::new(mock_policy_service),
-        );
+        let secret_usecase =
+            SecretUseCaseImpl::new(mock_connection, Arc::new(mock_secret_service), Arc::new(mock_policy_service));
 
         let result = secret_usecase
             .register(

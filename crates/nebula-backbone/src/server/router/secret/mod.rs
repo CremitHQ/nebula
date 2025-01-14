@@ -19,7 +19,7 @@ use crate::{
         secret::{SecretData, SecretRegisterCommand, SecretUpdate, SecretUseCase},
         Application,
     },
-    server::{check_member_role, check_workspace_name},
+    server::check_member_role,
 };
 
 use self::{
@@ -32,13 +32,12 @@ mod response;
 
 pub(crate) fn router(application: Arc<Application>) -> axum::Router {
     Router::new()
-        .route("/workspaces/:workspace_name/secrets", get(handle_get_secrets).post(handle_post_secret))
+        .route("/secrets", get(handle_get_secrets).post(handle_post_secret))
         .route(
-            "/workspaces/:workspace_name/secrets/*secret_identifier",
+            "/secrets/*secret_identifier",
             get(handle_get_secret).delete(handle_delete_secret).patch(handle_patch_secret),
         )
         .route_layer(middleware::from_fn(check_member_role))
-        .route_layer(middleware::from_fn(check_workspace_name))
         .with_state(application)
 }
 
@@ -50,16 +49,11 @@ struct GetSecretsApiQueryParam {
 
 #[debug_handler]
 async fn handle_get_secrets(
-    Path(workspace_name): Path<String>,
     Query(query_params): Query<GetSecretsApiQueryParam>,
     State(application): State<Arc<Application>>,
     Extension(claim): Extension<NebulaClaim>,
 ) -> Result<impl IntoResponse, application::secret::Error> {
-    let secrets = application
-        .with_workspace(&workspace_name)
-        .secret()
-        .list(query_params.path.as_deref().unwrap_or("/"), &claim)
-        .await?;
+    let secrets = application.secret().list(query_params.path.as_deref().unwrap_or("/"), &claim).await?;
     let response: Vec<SecretResponse> = secrets.into_iter().map(SecretResponse::from).collect();
 
     Ok(Json(response))
@@ -67,7 +61,6 @@ async fn handle_get_secrets(
 
 #[debug_handler]
 async fn handle_post_secret(
-    Path(workspace_name): Path<String>,
     State(application): State<Arc<Application>>,
     Extension(claim): Extension<NebulaClaim>,
     Json(payload): Json<PostSecretRequest>,
@@ -79,7 +72,6 @@ async fn handle_post_secret(
     };
 
     application
-        .with_workspace(&workspace_name)
         .secret()
         .register(
             SecretRegisterCommand {
@@ -97,30 +89,29 @@ async fn handle_post_secret(
 
 #[debug_handler]
 async fn handle_get_secret(
-    Path((workspace_name, secret_identifier)): Path<(String, String)>,
+    Path(secret_identifier): Path<String>,
     State(application): State<Arc<Application>>,
     Extension(claim): Extension<NebulaClaim>,
 ) -> Result<impl IntoResponse, application::secret::Error> {
-    let secret =
-        application.with_workspace(&workspace_name).secret().get(&format!("/{secret_identifier}"), &claim).await?;
+    let secret = application.secret().get(&format!("/{secret_identifier}"), &claim).await?;
 
     Ok(Json(SecretResponse::from(secret)))
 }
 
 #[debug_handler]
 async fn handle_delete_secret(
-    Path((workspace_name, secret_identifier)): Path<(String, String)>,
+    Path(secret_identifier): Path<String>,
     State(application): State<Arc<Application>>,
     Extension(claim): Extension<NebulaClaim>,
 ) -> Result<impl IntoResponse, application::secret::Error> {
-    application.with_workspace(&workspace_name).secret().delete(&format!("/{secret_identifier}"), &claim).await?;
+    application.secret().delete(&format!("/{secret_identifier}"), &claim).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
 
 #[debug_handler]
 async fn handle_patch_secret(
-    Path((workspace_name, secret_identifier)): Path<(String, String)>,
+    Path(secret_identifier): Path<String>,
     State(application): State<Arc<Application>>,
     Extension(claim): Extension<NebulaClaim>,
     Json(payload): Json<PatchSecretRequest>,
@@ -132,7 +123,6 @@ async fn handle_patch_secret(
     };
 
     application
-        .with_workspace(&workspace_name)
         .secret()
         .update(
             &format!("/{secret_identifier}"),

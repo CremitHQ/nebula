@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
@@ -19,14 +19,13 @@ pub(crate) fn router(application: Arc<Application>) -> axum::Router {
 }
 
 async fn handle_get_public_key(
-    Path(workspace_name): Path<String>,
     Query(query_params): Query<GetPublicKeyQueryParam>,
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, GetPublicKeyError> {
     let (key_pair, version) = if let Some(version) = query_params.version {
-        application.authority.key_pair_by_version(&workspace_name, version).await.map(|key_pair| (key_pair, version))
+        application.authority.key_pair_by_version(version).await.map(|key_pair| (key_pair, version))
     } else {
-        application.authority.key_pair(&workspace_name).await
+        application.authority.key_pair().await
     }
     .map_err(|_| GetPublicKeyError::GetPublicKey)?;
 

@@ -13,7 +13,7 @@ use nebula_token::claim::NebulaClaim;
 
 use crate::{
     application::{self, path::PathUseCase, Application},
-    server::{check_member_role, check_workspace_name, router::path::request::PatchPathRequest},
+    server::{check_member_role, router::path::request::PatchPathRequest},
 };
 
 use self::request::PostPathRequest;
@@ -24,74 +24,64 @@ mod response;
 
 pub(crate) fn router(application: Arc<Application>) -> axum::Router {
     Router::new()
-        .route("/workspaces/:workspace_name/paths", get(handle_get_paths).post(handle_post_path))
-        .route(
-            "/workspaces/:workspace_name/paths/*path",
-            get(handle_get_path).delete(handle_delete_path).patch(handle_patch_path),
-        )
+        .route("/paths", get(handle_get_paths).post(handle_post_path))
+        .route("/paths/*path", get(handle_get_path).delete(handle_delete_path).patch(handle_patch_path))
         .route_layer(middleware::from_fn(check_member_role))
-        .route_layer(middleware::from_fn(check_workspace_name))
         .with_state(application)
 }
 
 #[debug_handler]
 async fn handle_post_path(
-    Path(workspace_name): Path<String>,
     State(application): State<Arc<Application>>,
     Extension(claim): Extension<NebulaClaim>,
     Json(payload): Json<PostPathRequest>,
 ) -> Result<impl IntoResponse, application::path::Error> {
     let policies: Vec<_> =
         payload.applied_policies.into_iter().map(nebula_domain::secret::AppliedPolicy::from).collect();
-    application.with_workspace(&workspace_name).path().register(&payload.path, &policies, &claim).await?;
+    application.path().register(&payload.path, &policies, &claim).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
 
 #[debug_handler]
 async fn handle_get_paths(
-    Path(workspace_name): Path<String>,
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, application::path::Error> {
-    let paths = application.with_workspace(&workspace_name).path().get_all().await?;
+    let paths = application.path().get_all().await?;
 
     Ok(Json(paths.into_iter().map(response::PathResponse::from).collect::<Vec<_>>()))
 }
 
 #[debug_handler]
 async fn handle_delete_path(
-    Path((workspace_name, path)): Path<(String, String)>,
+    Path(path): Path<String>,
     State(application): State<Arc<Application>>,
     Extension(claim): Extension<NebulaClaim>,
 ) -> Result<impl IntoResponse, application::path::Error> {
-    application.with_workspace(&workspace_name).path().delete(&normalize_path(path), &claim).await?;
+    application.path().delete(&normalize_path(path), &claim).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
 
 #[debug_handler]
 async fn handle_patch_path(
-    Path((workspace_name, path)): Path<(String, String)>,
+    Path(path): Path<String>,
     State(application): State<Arc<Application>>,
     Extension(claim): Extension<NebulaClaim>,
     Json(payload): Json<PatchPathRequest>,
 ) -> Result<impl IntoResponse, application::path::Error> {
     let new_policies: Option<Vec<_>> =
         payload.applied_policies.map(|aps| aps.into_iter().map(nebula_domain::secret::AppliedPolicy::from).collect());
-    application
-        .with_workspace(&workspace_name)
-        .path()
-        .update(&normalize_path(path), payload.path.as_deref(), new_policies.as_deref(), &claim)
-        .await?;
+    application.path().update(&normalize_path(path), payload.path.as_deref(), new_policies.as_deref(), &claim).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
 #[debug_handler]
 async fn handle_get_path(
-    Path((workspace_name, path)): Path<(String, String)>,
+    Path(path): Path<String>,
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, application::path::Error> {
-    let path = application.with_workspace(&workspace_name).path().get(&normalize_path(path)).await?;
+    let path = application.path().get(&normalize_path(path)).await?;
 
     Ok(Json(response::PathResponse::from(path)))
 }

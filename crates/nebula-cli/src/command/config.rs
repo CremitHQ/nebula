@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::config::{AuthorizationConfig, AuthorizationMethod, BackboneConfig, NebulaConfig};
-use crate::utils::validation::{validate_new_profile, validate_url, validate_workspace_name};
+use crate::utils::validation::{validate_new_profile, validate_url};
 
 use super::{GlobalArgs, RunCommand};
 
@@ -36,8 +36,6 @@ pub struct InitConfigCommand {
     auth_method: Option<AuthMethod>,
     #[clap(long = "machine-identity-token", required_if_eq("auth_method", "machine-identity"))]
     machine_identity_token: Option<String>,
-    #[clap(short = 'w', long = "workspace")]
-    workspace_name: Option<String>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize, Default, Debug)]
@@ -103,16 +101,6 @@ impl RunCommand for InitConfigCommand {
             None
         };
 
-        let workspace_name = if let Some(workspace_name) = &self.workspace_name {
-            if matches!(validate_workspace_name(workspace_name), Ok(Validation::Valid)) {
-                workspace_name.clone()
-            } else {
-                return Err(anyhow::anyhow!("Invalid workspace name"));
-            }
-        } else {
-            Text::new("Workspace name:").with_validator(validate_workspace_name).prompt()?
-        };
-
         let profile = Text::new("Save a profile as:")
             .with_validator(validate_new_profile(args.config.clone()))
             .with_default(&args.profile)
@@ -128,7 +116,7 @@ impl RunCommand for InitConfigCommand {
                 }
             },
         );
-        let nebula_config = NebulaConfig::new(profile, workspace_name, backbone_config, authz_config);
+        let nebula_config = NebulaConfig::new(profile, backbone_config, authz_config);
 
         nebula_config.append()?;
 

@@ -2,51 +2,34 @@ use std::sync::Arc;
 
 use crate::config::{ApplicationConfig, UpstreamIdpConfig};
 use nebula_domain::{
-    connector::saml::{SAMLConnector, SAMLConnertorConfig, StaticWorkspaceConfig, WorkspaceConfig},
-    database::{self, connect_to_database, AuthMethod, AuthorizationWorkspaceSchemaMigrator},
+    connector::saml::{SAMLConnector, SAMLConnertorConfig},
+    database::{connect_to_database, AuthMethod, AuthorizationSchemaMigrator},
     machine_identity::MachineIdentityService,
     token::TokenService,
-    workspace::{WorkspaceService, WorkspaceServiceImpl},
 };
 
 use nebula_token::jwk::jwk_set::{JwkSet, JWK_SET_DEFAULT_KEY_ID};
-use sea_orm::{DatabaseConnection, TransactionTrait};
+use sea_orm::DatabaseConnection;
 
 pub struct Application {
     pub database_connection: Arc<DatabaseConnection>,
     pub connector: Arc<SAMLConnector>,
     pub token_service: Arc<TokenService>,
     pub machine_identity_service: Arc<MachineIdentityService>,
-    pub workspace_service: Arc<dyn WorkspaceService + Sync + Send>,
-    pub schema_migrator: Arc<AuthorizationWorkspaceSchemaMigrator>,
 }
 
 impl Application {
     pub async fn init(config: &ApplicationConfig) -> anyhow::Result<Self> {
         let database_connection = init_database_connection(config).await?;
         let auth_method = create_database_auth_method(config);
-        let schema_migrator = Arc::new(AuthorizationWorkspaceSchemaMigrator::new(
+        let schema_migrator = Arc::new(AuthorizationSchemaMigrator::new(
             config.database.host.to_owned(),
             config.database.port,
             config.database.database_name.to_owned(),
             auth_method.clone(),
         ));
 
-        match config.workspace {
-            WorkspaceConfig::Static(StaticWorkspaceConfig { ref name }) => {
-                schema_migrator.migrate(name).await?;
-            }
-            WorkspaceConfig::Claim(_) => {
-                database::migrate_all_authorization_workspaces(
-                    &database_connection.begin().await?,
-                    &config.database.host,
-                    config.database.port,
-                    &config.database.database_name,
-                    &create_database_auth_method(config),
-                )
-                .await?;
-            }
-        }
+        schema_migrator.migrate().await?;
 
         let saml_config = match config.upstream_idp {
             UpstreamIdpConfig::Saml(ref saml) => {
@@ -64,7 +47,6 @@ impl Application {
                     .entity_id(&saml.entity_id)
                     .ca(openssl::x509::X509::from_pem(saml.ca.as_bytes())?)
                     .attributes_config(saml.attributes.clone())
-                    .workspace_config(config.workspace.clone())
                     .admin_role_config(saml.admin_role.clone())
                     .build()
             }
@@ -88,8 +70,6 @@ impl Application {
                 kid,
             )),
             machine_identity_service: Arc::new(MachineIdentityService {}),
-            workspace_service: Arc::new(WorkspaceServiceImpl::default()),
-            schema_migrator,
         })
     }
 }

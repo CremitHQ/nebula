@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use sea_orm::{DatabaseConnection, DatabaseTransaction, DbErr};
+use sea_orm::{DatabaseConnection, DatabaseTransaction, DbErr, TransactionTrait as _};
 use ulid::Ulid;
 
 use nebula_domain::{
     self as domain,
     authority::{Authority, AuthorityService},
-    database::{Persistable, WorkspaceScopedTransaction},
+    database::Persistable,
 };
 
 pub struct AuthorityData {
@@ -38,18 +38,16 @@ pub trait AuthorityUseCase {
 }
 
 pub struct AuthorityUseCaseImpl {
-    workspace_name: String,
     database_connection: Arc<DatabaseConnection>,
     authority_service: Arc<dyn AuthorityService + Sync + Send>,
 }
 
 impl AuthorityUseCaseImpl {
     pub fn new(
-        workspace_name: String,
         database_connection: Arc<DatabaseConnection>,
         authority_service: Arc<dyn AuthorityService + Sync + Send>,
     ) -> Self {
-        Self { workspace_name, database_connection, authority_service }
+        Self { database_connection, authority_service }
     }
 
     async fn get_authority_model(&self, transaction: &DatabaseTransaction, authority_id: &Ulid) -> Result<Authority> {
@@ -63,14 +61,14 @@ impl AuthorityUseCaseImpl {
 #[async_trait]
 impl AuthorityUseCase for AuthorityUseCaseImpl {
     async fn register_authority(&self, name: &str, host: &str) -> Result<()> {
-        let transaction = self.database_connection.begin_with_workspace_scope(&self.workspace_name).await?;
+        let transaction = self.database_connection.begin().await?;
         self.authority_service.register_authority(&transaction, name, host).await?;
         transaction.commit().await?;
         Ok(())
     }
 
     async fn get_authorities(&self) -> Result<Vec<AuthorityData>> {
-        let transaction = self.database_connection.begin_with_workspace_scope(&self.workspace_name).await?;
+        let transaction = self.database_connection.begin().await?;
         let authorities = self.authority_service.get_authorities(&transaction).await?;
         transaction.commit().await?;
 
@@ -78,7 +76,7 @@ impl AuthorityUseCase for AuthorityUseCaseImpl {
     }
 
     async fn get_authority(&self, authority_id: &Ulid) -> Result<AuthorityData> {
-        let transaction = self.database_connection.begin_with_workspace_scope(&self.workspace_name).await?;
+        let transaction = self.database_connection.begin().await?;
         let authority = self.get_authority_model(&transaction, authority_id).await?;
         transaction.commit().await?;
 
@@ -91,7 +89,7 @@ impl AuthorityUseCase for AuthorityUseCaseImpl {
         new_name: Option<&str>,
         new_public_key: Option<&str>,
     ) -> Result<()> {
-        let transaction = self.database_connection.begin_with_workspace_scope(&self.workspace_name).await?;
+        let transaction = self.database_connection.begin().await?;
 
         let mut authority = self.get_authority_model(&transaction, authority_id).await?;
         if let Some(new_name) = new_name {
@@ -108,7 +106,7 @@ impl AuthorityUseCase for AuthorityUseCaseImpl {
     }
 
     async fn delete_authority(&self, authority_id: &Ulid) -> Result<()> {
-        let transaction = self.database_connection.begin_with_workspace_scope(&self.workspace_name).await?;
+        let transaction = self.database_connection.begin().await?;
 
         let mut authority = self.get_authority_model(&transaction, authority_id).await?;
         authority.delete();

@@ -1,12 +1,6 @@
 use std::sync::Arc;
 
-use axum::{
-    extract::{Path, State},
-    http::StatusCode,
-    response::IntoResponse,
-    routing::patch,
-    Json, Router,
-};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::patch, Json, Router};
 use axum_thiserror::ErrorStatus;
 
 use nebula_abe::random::miracl::MiraclRng;
@@ -22,13 +16,12 @@ pub(crate) fn router(application: Arc<Application>) -> axum::Router {
 }
 
 async fn handle_key_pair_rolling(
-    Path(workspace_name): Path<String>,
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, KeyPairRollingError> {
     let gp = application
         .authority
         .backbone_service
-        .global_params(&workspace_name)
+        .global_params()
         .await
         .map_err(|_| KeyPairRollingError::GetGlobalParams)?;
 
@@ -37,11 +30,8 @@ async fn handle_key_pair_rolling(
     OsRng.fill(&mut seed);
     rng.seed(&seed);
 
-    let version = application
-        .authority
-        .key_pair_rolling(&gp, &workspace_name)
-        .await
-        .map_err(|_| KeyPairRollingError::FailedToRollKeyPair)?;
+    let version =
+        application.authority.key_pair_rolling(&gp).await.map_err(|_| KeyPairRollingError::FailedToRollKeyPair)?;
 
     Ok(Json(KeyPairRollingResponse { version }))
 }

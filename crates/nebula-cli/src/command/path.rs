@@ -37,14 +37,13 @@ impl RunCommand for PathCreateCommand {
         let config = NebulaConfig::load(args.profile.as_str(), args.config.clone().map(Into::into))?;
         let token = load_token(&args.profile)?;
         let backbone_url = config.backbone.host;
-        let workspace_name = config.workspace;
 
         let request = CreatePathRequest {
             path: self.path.clone(),
             applied_policies: vec![], // TODO: Implement applied policies for path creation
         };
 
-        create_path(backbone_url.clone(), &workspace_name, request, &token).await?;
+        create_path(backbone_url.clone(), request, &token).await?;
 
         execute!(stdout(), SetForegroundColor(Color::Green), Print("✅ Successfully created path\n"), ResetColor)?;
 

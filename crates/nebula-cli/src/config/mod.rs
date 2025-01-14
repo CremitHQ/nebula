@@ -13,19 +13,13 @@ pub struct NebulaConfigs {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NebulaConfig {
     pub name: String,
-    pub workspace: String,
     pub backbone: BackboneConfig,
     pub authorization: AuthorizationConfig,
 }
 
 impl NebulaConfig {
-    pub fn new(
-        profile: String,
-        workspace: String,
-        backbone: BackboneConfig,
-        authorization: AuthorizationConfig,
-    ) -> Self {
-        Self { name: profile, workspace, backbone, authorization }
+    pub fn new(profile: String, backbone: BackboneConfig, authorization: AuthorizationConfig) -> Self {
+        Self { name: profile, backbone, authorization }
     }
 
     pub fn load(profile: &str, config_path: Option<PathBuf>) -> anyhow::Result<NebulaConfig> {

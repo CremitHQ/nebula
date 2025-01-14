@@ -9,20 +9,15 @@ use url::Url;
 
 #[async_trait]
 pub trait BackboneService {
-    async fn global_params(&self, workspace_name: &str) -> Result<GlobalParams<Bn462Curve>>;
+    async fn global_params(&self) -> Result<GlobalParams<Bn462Curve>>;
 }
 
-#[async_trait]
-pub trait BackboneClient {
-    async fn get_global_params(&self, workspace_name: &str) -> Result<GlobalParams<Bn462Curve>>;
-}
-
-pub struct WorkspaceBackboneClient {
+pub struct BackboneClient {
     client: reqwest::Client,
     host: Url,
 }
 
-impl WorkspaceBackboneClient {
+impl BackboneClient {
     pub fn new(host: Url) -> Self {
         Self { host, client: reqwest::Client::new() }
     }
@@ -44,10 +39,9 @@ struct ParameterResponse {
     parameter: String,
 }
 
-#[async_trait]
-impl BackboneClient for WorkspaceBackboneClient {
-    async fn get_global_params(&self, workspace_name: &str) -> Result<GlobalParams<Bn462Curve>> {
-        let url = self.host.join(&format!("workspaces/{}/parameter", workspace_name))?;
+impl BackboneClient {
+    async fn get_global_params(&self) -> Result<GlobalParams<Bn462Curve>> {
+        let url = self.host.join("parameter")?;
         let response = self.client.get(url).send().await?;
         let parameter: ParameterResponse = response.json().await?;
         let parameter = STANDARD.decode(parameter.parameter)?;
@@ -57,25 +51,25 @@ impl BackboneClient for WorkspaceBackboneClient {
     }
 }
 
-pub struct WorkspaceBackboneService {
+pub struct BackboneServiceImpl {
     backbone_host: Url,
 }
 
-impl WorkspaceBackboneService {
+impl BackboneServiceImpl {
     pub fn new(backbone_host: Url) -> Self {
         Self { backbone_host }
     }
 }
 
 #[async_trait]
-impl BackboneService for WorkspaceBackboneService {
-    async fn global_params(&self, workspace_name: &str) -> Result<GlobalParams<Bn462Curve>> {
-        get_global_params(&self.backbone_host, workspace_name).await
+impl BackboneService for BackboneServiceImpl {
+    async fn global_params(&self) -> Result<GlobalParams<Bn462Curve>> {
+        get_global_params(&self.backbone_host).await
     }
 }
 
-#[cached(size = 32, result = true, key = "String", convert = r#"{ format!("{}{}", host.as_str(), workspace_name) }"#)]
-async fn get_global_params(host: &Url, workspace_name: &str) -> Result<GlobalParams<Bn462Curve>> {
-    let client = WorkspaceBackboneClient::new(host.clone());
-    client.get_global_params(workspace_name).await
+#[cached(size = 32, result = true, key = "String", convert = r#"{ format!("{}", host.as_str()) }"#)]
+async fn get_global_params(host: &Url) -> Result<GlobalParams<Bn462Curve>> {
+    let client = BackboneClient::new(host.clone());
+    client.get_global_params().await
 }
