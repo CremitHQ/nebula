@@ -36,7 +36,7 @@ pub(crate) fn router(application: Arc<Application>) -> axum::Router {
 async fn handle_post_parameter(
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, application::parameter::Error> {
-    let parameter = application.with().parameter().create().await?;
+    let parameter = application.parameter().create().await?;
     let response: ParameterResponse = parameter.try_into()?;
 
     Ok(Json(response))
@@ -45,7 +45,7 @@ async fn handle_post_parameter(
 async fn handle_get_parameter(
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, application::parameter::Error> {
-    let parameter = application.with().parameter().get().await?;
+    let parameter = application.parameter().get().await?;
     let response: ParameterResponse = parameter.try_into()?;
 
     Ok(Json(response))

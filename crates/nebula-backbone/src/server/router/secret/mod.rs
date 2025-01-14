@@ -53,7 +53,7 @@ async fn handle_get_secrets(
     State(application): State<Arc<Application>>,
     Extension(claim): Extension<NebulaClaim>,
 ) -> Result<impl IntoResponse, application::secret::Error> {
-    let secrets = application.with().secret().list(query_params.path.as_deref().unwrap_or("/"), &claim).await?;
+    let secrets = application.secret().list(query_params.path.as_deref().unwrap_or("/"), &claim).await?;
     let response: Vec<SecretResponse> = secrets.into_iter().map(SecretResponse::from).collect();
 
     Ok(Json(response))
@@ -72,7 +72,6 @@ async fn handle_post_secret(
     };
 
     application
-        .with()
         .secret()
         .register(
             SecretRegisterCommand {
@@ -94,7 +93,7 @@ async fn handle_get_secret(
     State(application): State<Arc<Application>>,
     Extension(claim): Extension<NebulaClaim>,
 ) -> Result<impl IntoResponse, application::secret::Error> {
-    let secret = application.with().secret().get(&format!("/{secret_identifier}"), &claim).await?;
+    let secret = application.secret().get(&format!("/{secret_identifier}"), &claim).await?;
 
     Ok(Json(SecretResponse::from(secret)))
 }
@@ -105,7 +104,7 @@ async fn handle_delete_secret(
     State(application): State<Arc<Application>>,
     Extension(claim): Extension<NebulaClaim>,
 ) -> Result<impl IntoResponse, application::secret::Error> {
-    application.with().secret().delete(&format!("/{secret_identifier}"), &claim).await?;
+    application.secret().delete(&format!("/{secret_identifier}"), &claim).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -124,7 +123,6 @@ async fn handle_patch_secret(
     };
 
     application
-        .with()
         .secret()
         .update(
             &format!("/{secret_identifier}"),

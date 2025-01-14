@@ -38,7 +38,7 @@ pub(crate) fn router(application: Arc<Application>) -> axum::Router {
 async fn handle_get_policies(
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, application::policy::Error> {
-    let policies = application.with().policy().get_all().await?;
+    let policies = application.policy().get_all().await?;
 
     Ok(Json(policies.into_iter().map(response::PolicyResponse::from).collect::<Vec<_>>()))
 }
@@ -48,7 +48,7 @@ async fn handle_post_policy(
     State(application): State<Arc<Application>>,
     Json(payload): Json<request::PostPolicyRequest>,
 ) -> Result<impl IntoResponse, application::policy::Error> {
-    application.with().policy().register(&payload.name, &payload.expression).await?;
+    application.policy().register(&payload.name, &payload.expression).await?;
 
     Ok(StatusCode::CREATED)
 }
@@ -58,7 +58,7 @@ async fn handle_get_policy(
     Path(policy_id): Path<Ulid>,
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, application::policy::Error> {
-    let policy = application.with().policy().get_policy(policy_id).await?;
+    let policy = application.policy().get_policy(policy_id).await?;
 
     Ok(Json(PolicyResponse::from(policy)))
 }
@@ -69,7 +69,7 @@ async fn handle_patch_policy(
     State(application): State<Arc<Application>>,
     Json(payload): Json<request::PatchPolicyRequest>,
 ) -> Result<impl IntoResponse, application::policy::Error> {
-    application.with().policy().update(&policy_id, payload.name.as_deref(), payload.expression.as_deref()).await?;
+    application.policy().update(&policy_id, payload.name.as_deref(), payload.expression.as_deref()).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -79,7 +79,7 @@ async fn handle_delete_policy(
     Path(policy_id): Path<Ulid>,
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, application::policy::Error> {
-    application.with().policy().delete(&policy_id).await?;
+    application.policy().delete(&policy_id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

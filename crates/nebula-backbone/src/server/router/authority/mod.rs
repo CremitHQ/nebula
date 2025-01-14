@@ -66,7 +66,7 @@ async fn handle_post_authority(
     State(application): State<Arc<Application>>,
     Json(payload): Json<PostAuthorityRequest>,
 ) -> application::authority::Result<impl IntoResponse> {
-    application.with().authority().register_authority(&payload.name, &payload.host).await?;
+    application.authority().register_authority(&payload.name, &payload.host).await?;
     Ok(StatusCode::CREATED)
 }
 
@@ -74,7 +74,7 @@ async fn handle_post_authority(
 async fn handle_get_authorities(
     State(application): State<Arc<Application>>,
 ) -> application::authority::Result<impl IntoResponse> {
-    let authorities = application.with().authority().get_authorities().await?;
+    let authorities = application.authority().get_authorities().await?;
     let payload: Vec<_> = authorities.into_iter().map(response::AuthorityResponse::from).collect();
 
     Ok(Json(payload))
@@ -85,7 +85,7 @@ async fn handle_get_authority(
     Path(authority_id): Path<Ulid>,
     State(application): State<Arc<Application>>,
 ) -> application::authority::Result<impl IntoResponse> {
-    let authority = application.with().authority().get_authority(&authority_id).await?;
+    let authority = application.authority().get_authority(&authority_id).await?;
 
     let payload = AuthorityResponse::from(authority);
 
@@ -99,7 +99,6 @@ async fn handle_patch_authority(
     Json(payload): Json<PatchAuthorityRequest>,
 ) -> application::authority::Result<impl IntoResponse> {
     application
-        .with()
         .authority()
         .update_authority(&authority_id, payload.name.as_deref(), payload.public_key.as_deref())
         .await?;
@@ -112,7 +111,7 @@ async fn handle_delete_authority(
     Path(authority_id): Path<Ulid>,
     State(application): State<Arc<Application>>,
 ) -> application::authority::Result<impl IntoResponse> {
-    application.with().authority().delete_authority(&authority_id).await?;
+    application.authority().delete_authority(&authority_id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

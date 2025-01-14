@@ -38,7 +38,7 @@ async fn handle_post_path(
 ) -> Result<impl IntoResponse, application::path::Error> {
     let policies: Vec<_> =
         payload.applied_policies.into_iter().map(nebula_domain::secret::AppliedPolicy::from).collect();
-    application.with().path().register(&payload.path, &policies, &claim).await?;
+    application.path().register(&payload.path, &policies, &claim).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -47,7 +47,7 @@ async fn handle_post_path(
 async fn handle_get_paths(
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, application::path::Error> {
-    let paths = application.with().path().get_all().await?;
+    let paths = application.path().get_all().await?;
 
     Ok(Json(paths.into_iter().map(response::PathResponse::from).collect::<Vec<_>>()))
 }
@@ -58,7 +58,7 @@ async fn handle_delete_path(
     State(application): State<Arc<Application>>,
     Extension(claim): Extension<NebulaClaim>,
 ) -> Result<impl IntoResponse, application::path::Error> {
-    application.with().path().delete(&normalize_path(path), &claim).await?;
+    application.path().delete(&normalize_path(path), &claim).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -72,11 +72,7 @@ async fn handle_patch_path(
 ) -> Result<impl IntoResponse, application::path::Error> {
     let new_policies: Option<Vec<_>> =
         payload.applied_policies.map(|aps| aps.into_iter().map(nebula_domain::secret::AppliedPolicy::from).collect());
-    application
-        .with()
-        .path()
-        .update(&normalize_path(path), payload.path.as_deref(), new_policies.as_deref(), &claim)
-        .await?;
+    application.path().update(&normalize_path(path), payload.path.as_deref(), new_policies.as_deref(), &claim).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -85,7 +81,7 @@ async fn handle_get_path(
     Path(path): Path<String>,
     State(application): State<Arc<Application>>,
 ) -> Result<impl IntoResponse, application::path::Error> {
-    let path = application.with().path().get(&normalize_path(path)).await?;
+    let path = application.path().get(&normalize_path(path)).await?;
 
     Ok(Json(response::PathResponse::from(path)))
 }

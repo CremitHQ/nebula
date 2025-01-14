@@ -36,30 +36,6 @@ pub(crate) struct Application {
 }
 
 impl Application {
-    pub fn with(&self) -> ApplicationWithUseCase {
-        ApplicationWithUseCase {
-            database_connection: self.database_connection.clone(),
-            secret_service: self.secret_service.clone(),
-            parameter_service: self.parameter_service.clone(),
-            policy_service: self.policy_service.clone(),
-            authority_service: self.authority_service.clone(),
-        }
-    }
-
-    pub fn jwks_discovery(&self) -> Arc<dyn JwksDiscovery + Sync + Send> {
-        self.jwks_discovery.clone()
-    }
-}
-
-pub(crate) struct ApplicationWithUseCase {
-    database_connection: Arc<DatabaseConnection>,
-    secret_service: Arc<dyn SecretService + Sync + Send>,
-    parameter_service: Arc<dyn ParameterService + Sync + Send>,
-    policy_service: Arc<dyn PolicyService + Sync + Send>,
-    authority_service: Arc<dyn AuthorityService + Sync + Send>,
-}
-
-impl ApplicationWithUseCase {
     pub fn secret(&self) -> impl SecretUseCase {
         SecretUseCaseImpl::new(
             self.database_connection.clone(),
@@ -82,6 +58,10 @@ impl ApplicationWithUseCase {
 
     pub fn authority(&self) -> impl AuthorityUseCase {
         AuthorityUseCaseImpl::new(self.database_connection.clone(), self.authority_service.clone())
+    }
+
+    pub fn jwks_discovery(&self) -> Arc<dyn JwksDiscovery + Sync + Send> {
+        self.jwks_discovery.clone()
     }
 }
 
