@@ -64,7 +64,7 @@ impl GCM {
         for i in 1..128 {
             let mut c: u32 = 0;
             for j in 0..GCM_NB {
-                self.table[i][j] = c | (self.table[i - 1][j]) >> 1;
+                self.table[i][j] = c | ((self.table[i - 1][j]) >> 1);
                 c = self.table[i - 1][j] << 31;
             }
             if c != 0 {
@@ -114,9 +114,9 @@ impl GCM {
         let mut el: [u8; 16] = [0; 16];
 
         /* convert lengths from bytes to bits */
-        f[0] = (self.lena[0] << 3) | (self.lena[1] & 0xE0000000) >> 29;
+        f[0] = (self.lena[0] << 3) | ((self.lena[1] & 0xE0000000) >> 29);
         f[1] = self.lena[1] << 3;
-        f[2] = (self.lenc[0] << 3) | (self.lenc[1] & 0xE0000000) >> 29;
+        f[2] = (self.lenc[0] << 3) | ((self.lenc[1] & 0xE0000000) >> 29);
         f[3] = self.lenc[1] << 3;
         let mut j = 0;
         for i in 0..GCM_NB {
