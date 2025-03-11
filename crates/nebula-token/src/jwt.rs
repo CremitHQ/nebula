@@ -67,7 +67,7 @@ impl Jwt {
     }
 
     pub fn is_expired(&self) -> bool {
-        self.payload.expires_at().map_or(true, |exp| exp < SystemTime::now())
+        self.payload.expires_at().is_none_or(|exp| exp < SystemTime::now())
     }
 
     pub fn kid(&self) -> Option<&str> {
