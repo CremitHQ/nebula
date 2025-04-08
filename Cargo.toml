@@ -26,7 +26,7 @@ opt-level = 0
 rand = "0.8"
 anyhow = "1.0"
 async-trait = "0.1"
-tokio = "1.40"
+tokio = "1.44"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.18", features = ["json"] }
 serde = "1.0"
